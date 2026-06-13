@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "538294004849",
-    "project_id": "monederosmart-64755",
-    "storage_bucket": "monederosmart-64755.firebasestorage.app"
+    "project_number": "933521453563",
+    "project_id": "monedero-85e25",
+    "storage_bucket": "monedero-85e25.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:538294004849:android:449ac83374370e89753fd0",
+        "mobilesdk_app_id": "1:933521453563:android:5ab4f0c54bfb50a87d9b5e",
         "android_client_info": {
-          "package_name": "com.tuusuario.monedero"
+          "package_name": "com.kilomkolim84rgb.monedero"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAqBsWWcd5rFqGg2dIYN4WtgDcXKeAQY2Q"
+          "current_key": "AIzaSyDl99Nnw7q7l_K9DCfp1N-K7nsPE5gIl6A"
         }
       ],
       "services": {
