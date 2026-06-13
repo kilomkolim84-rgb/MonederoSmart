@@ -1,9 +1,25 @@
 plugins {
     id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
 }
 
-android { ... }
-dependencies { ... }
+android {
+    namespace 'com.tuapp.monedero' // tu package
+    compileSdk 34
 
-// El plugin de Google Services va SIEMPRE AL FINAL del archivo
+    defaultConfig {
+        applicationId "com.tuapp.monedero"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+    // ... resto del bloque android
+}
+
+dependencies {
+    // todas tus librerías aquí
+}
+
+// ESTA LÍNEA VA HASTA EL FINAL, SOLITA
 apply plugin: 'com.google.gms.google-services'
