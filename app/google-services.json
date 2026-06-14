@@ -1,14 +1,13 @@
 {
   "project_info": {
-    "project_number": "125396681483",
-    "firebase_url": "https://monedero-smart-default-rtdb.firebaseio.com",
-    "project_id": "monedero-smart",
-    "storage_bucket": "monedero-smart.firebasestorage.app"
+    "project_number": "933521453563",
+    "project_id": "monedero-85e25",
+    "storage_bucket": "monedero-85e25.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:125396681483:android:30628a2bb04ca72024580e",
+        "mobilesdk_app_id": "1:933521453563:android:5ab4f0c54bfb50a87d9b5e",
         "android_client_info": {
           "package_name": "com.kilomkolim84rgb.monedero"
         }
@@ -16,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCOO09HtHPEuucRLIJ8IozxIGbbhKkOyqw"
+          "current_key": "AIzaSyDl99Nnw7q7l_K9DCfp1N-K7nsPE5gIl6A"
         }
       ],
       "services": {
