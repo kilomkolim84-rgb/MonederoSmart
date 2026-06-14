@@ -1,14 +1,11 @@
 package com.kilomkolim84rgb.monedero
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,10 +15,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
+import androidx.compose.ui.unit.sp
 import com.google.firebase.database.*
 
 data class Transaccion(
@@ -37,7 +34,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Pide permiso de notificaciones
         if (!isNotificationServiceEnabled()) {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         }
@@ -63,7 +59,16 @@ class MainActivity : ComponentActivity() {
         var password by remember { mutableStateOf("") }
         var transaccionABorrar by remember { mutableStateOf<Transaccion?>(null) }
 
-        // Escucha Firebase en tiempo real
+        // CALCULAR TOTAL
+        val total = remember(transacciones) {
+            transacciones.sumOf { 
+                it.monto.replace("S/", "")
+                    .replace(",", ".")
+                    .replace(" ", "")
+                    .toDoubleOrNull() ?: 0.0 
+            }
+        }
+
         LaunchedEffect(Unit) {
             myRef.orderByChild("fecha").addValueEventListener(object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
@@ -81,7 +86,7 @@ class MainActivity : ComponentActivity() {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Monedero Paoyhan", fontWeight = FontWeight.Bold) },
+                    title = { Text("MonederoSmart", fontWeight = FontWeight.Bold) },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer
                     )
@@ -89,15 +94,42 @@ class MainActivity : ComponentActivity() {
             }
         ) { padding ->
             Column(Modifier.padding(padding).fillMaxSize()) {
+                // HEADER MORADO CON TOTAL
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color(0xFFE1D5F7),
+                    tonalElevation = 2.dp
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Monedero Paoyhan",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = "Monto Total: S/ %.2f".format(total),
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                
+                // LISTA
                 if (transacciones.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Esperando Yapeos de Paoyhan...")
+                        Text("Esperando Yapeos de Paoyhan...", color = Color.Gray)
                     }
                 } else {
-                    LazyColumn(Modifier.padding(16.dp)) {
+                    LazyColumn(
+                        Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         items(transacciones) { trans ->
                             Card(
-                                Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                Modifier.fillMaxWidth(),
                                 elevation = CardDefaults.cardElevation(4.dp)
                             ) {
                                 Row(
@@ -113,7 +145,7 @@ class MainActivity : ComponentActivity() {
                                         transaccionABorrar = trans
                                         showDialog = true
                                     }) {
-                                        Icon(Icons.Default.Delete, "Borrar")
+                                        Icon(Icons.Default.Delete, "Borrar", tint = Color.Red)
                                     }
                                 }
                             }
@@ -123,7 +155,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Dialog de clave para borrar
         if (showDialog) {
             AlertDialog(
                 onDismissRequest = { showDialog = false },
@@ -146,9 +177,4 @@ class MainActivity : ComponentActivity() {
                     }) { Text("Borrar") }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showDialog = false }) { Text("Cancelar") }
-                }
-            )
-        }
-    }
-}
+                    TextButton(onClick = { show
