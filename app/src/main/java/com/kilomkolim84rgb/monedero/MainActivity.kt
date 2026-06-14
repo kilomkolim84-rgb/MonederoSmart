@@ -1,4 +1,4 @@
-package com.kilomkolim84.monedero
+package com.kilomkolim84rgb.monedero
 
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
