@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -55,10 +56,10 @@ class MainActivity : ComponentActivity() {
     fun MonederoScreen() {
         var transacciones by remember { mutableStateOf(listOf<Transaccion>()) }
         var showDialog by remember { mutableStateOf(false) }
+        var showDialogBorrarTodo by remember { mutableStateOf(false) }
         var password by remember { mutableStateOf("") }
         var transaccionABorrar by remember { mutableStateOf<Transaccion?>(null) }
 
-        // CALCULAR TOTAL
         val total = remember(transacciones) {
             transacciones.sumOf { 
                 it.monto.replace("S/", "")
@@ -88,12 +89,17 @@ class MainActivity : ComponentActivity() {
                     title = { Text("MonederoSmart", fontWeight = FontWeight.Bold) },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
+                    ),
+                    actions = {
+                        // BOTÓN BORRAR TODO
+                        IconButton(onClick = { showDialogBorrarTodo = true }) {
+                            Icon(Icons.Default.DeleteForever, "Borrar todo", tint = Color.Red)
+                        }
+                    }
                 )
             }
         ) { padding ->
             Column(Modifier.padding(padding).fillMaxSize()) {
-                // HEADER MORADO CON TOTAL
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = Color(0xFFE1D5F7),
@@ -116,7 +122,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 
-                // LISTA
                 if (transacciones.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text("Esperando Yapeos de Paoyhan...", color = Color.Gray)
@@ -154,6 +159,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // DIALOG BORRAR UNO
         if (showDialog) {
             AlertDialog(
                 onDismissRequest = { showDialog = false },
@@ -180,6 +186,45 @@ class MainActivity : ComponentActivity() {
                 dismissButton = {
                     TextButton(onClick = { 
                         showDialog = false 
+                        password = ""
+                    }) { 
+                        Text("Cancelar") 
+                    }
+                }
+            )
+        }
+
+        // DIALOG BORRAR TODO
+        if (showDialogBorrarTodo) {
+            AlertDialog(
+                onDismissRequest = { showDialogBorrarTodo = false },
+                title = { Text("Borrar Todo") },
+                text = {
+                    Column {
+                        Text("¿Seguro que quieres borrar todos los yapeos?")
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            label = { Text("Clave de seguridad") },
+                            singleLine = true
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (password == "123456") {
+                            myRef.removeValue() // BORRA TODO FIREBASE
+                            showDialogBorrarTodo = false
+                            password = ""
+                        }
+                    }) { 
+                        Text("Borrar Todo", color = Color.Red) 
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { 
+                        showDialogBorrarTodo = false 
                         password = ""
                     }) { 
                         Text("Cancelar") 
