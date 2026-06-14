@@ -56,3 +56,6 @@ dependencies {
     implementation 'com.google.firebase:firebase-database-ktx'
     implementation 'com.google.firebase:firebase-analytics-ktx'
 }
+ksp {
+    arg("room.incremental", "true")
+}
