@@ -7,8 +7,7 @@
     <application
         android:allowBackup="true"
         android:label="MonederoSmart"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.Material3.DayNight.NoActionBar">
+        android:supportsRtl="true">
         
         <activity
             android:name=".MainActivity"
