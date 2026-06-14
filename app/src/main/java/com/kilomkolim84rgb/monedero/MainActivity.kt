@@ -16,7 +16,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.room.*
-import com.google.firebase.database.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -75,6 +74,9 @@ class MonederoViewModel : ViewModel() {
     
     fun initDatabase(context: android.content.Context) {
         db = MonederoDatabase.getDatabase(context)
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            cargarMonedas()
+        }
     }
 
     fun insertarMoneda(monto: Int) {
@@ -116,9 +118,13 @@ fun MonederoScreen(viewModel: MonederoViewModel) {
     ) {
         Text("Total: S/ $total", fontSize = 32.sp, fontWeight = FontWeight.Bold)
         
+        Spacer(modifier = Modifier.height(16.dp))
+        
         Button(onClick = { viewModel.insertarMoneda(1) }) {
             Text("Agregar S/ 1")
         }
+        
+        Spacer(modifier = Modifier.height(16.dp))
         
         LazyColumn {
             items(monedas) { moneda ->
