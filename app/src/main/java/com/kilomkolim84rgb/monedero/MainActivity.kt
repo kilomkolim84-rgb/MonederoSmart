@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.database.*
+import androidx.compose.foundation.layout.Spacer
 
 data class Transaccion(
     val id: String = "",
@@ -108,7 +109,7 @@ class MainActivity : ComponentActivity() {
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "Monto Total: S/ %.2f".format(total),
                             fontSize = 28.sp,
