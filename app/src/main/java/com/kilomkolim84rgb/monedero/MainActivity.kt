@@ -5,7 +5,6 @@ import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,7 +19,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.database.*
-import androidx.compose.foundation.layout.Spacer
 
 data class Transaccion(
     val id: String = "",
@@ -175,7 +173,19 @@ class MainActivity : ComponentActivity() {
                             showDialog = false
                             password = ""
                         }
-                    }) { Text("Borrar") }
+                    }) { 
+                        Text("Borrar") 
+                    }
                 },
                 dismissButton = {
-                    TextButton(onClick = { show
+                    TextButton(onClick = { 
+                        showDialog = false 
+                        password = ""
+                    }) { 
+                        Text("Cancelar") 
+                    }
+                }
+            )
+        }
+    }
+}
