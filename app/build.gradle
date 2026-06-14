@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace 'com.kilomkolim84.monedero'
+    namespace 'com.kilomkolim84rgb.monedero'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.kilomkolim84.monedero"
+        applicationId "com.kilomkolim84rgb.monedero"
         minSdk 24
         targetSdk 34
         versionCode 44
