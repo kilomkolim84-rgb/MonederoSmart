@@ -8,9 +8,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:125396681483:android:2a612a1bffbb369724580e",
+        "mobilesdk_app_id": "1:125396681483:android:30628a2bb04ca72024580e",
         "android_client_info": {
-          "package_name": "com.kilomkolim84.monedero"
+          "package_name": "com.kilomkolim84rgb.monedero"
         }
       },
       "oauth_client": [],
