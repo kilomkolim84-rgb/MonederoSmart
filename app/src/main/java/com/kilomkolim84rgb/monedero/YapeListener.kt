@@ -4,6 +4,12 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.google.firebase.database.FirebaseDatabase
 
+data class Transaccion(
+    val id: String = "",
+    val monto: String = "",
+    val fecha: Long = System.currentTimeMillis()
+)
+
 class YapeListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val pack = sbn.packageName
@@ -11,7 +17,6 @@ class YapeListener : NotificationListenerService() {
             val extras = sbn.notification.extras
             val texto = extras.getString("android.text") ?: return
             
-            // Solo si viene de Paoyhan y tiene monto
             if (texto.contains("Paoyhan", ignoreCase = true) && 
                 (texto.contains("un sol") || texto.contains("soles") || texto.contains("S/"))) {
                 
