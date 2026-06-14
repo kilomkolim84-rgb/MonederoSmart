@@ -6,18 +6,18 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(entities = [Moneda::class], version = 1, exportSchema = false)
-abstract class AppDatabase : RoomDatabase() {
+abstract class MonederoDatabase : RoomDatabase() { // <-- CAMBIÉ EL NOMBRE
     abstract fun monedaDao(): MonedaDao
 
     companion object {
         @Volatile
-        private var INSTANCE: AppDatabase? = null
+        private var INSTANCE: MonederoDatabase? = null
 
-        fun getDatabase(context: Context): AppDatabase {
+        fun getDatabase(context: Context): MonederoDatabase {
             return INSTANCE?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
-                    AppDatabase::class.java,
+                    MonederoDatabase::class.java, // <-- CAMBIÉ EL NOMBRE
                     "monedero_database"
                 ).build()
                 INSTANCE = instance
