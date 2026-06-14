@@ -42,15 +42,34 @@ data class Moneda(
 interface MonedaDao {
     @Query("SELECT * FROM Moneda ORDER BY fecha DESC")
     suspend fun getAll(): List<Moneda>
+    
     @Insert
     suspend fun insert(moneda: Moneda)
+    
     @Query("DELETE FROM Moneda")
     suspend fun deleteAll()
 }
 
-@Database(entities = [Moneda::class], version = 1)
-abstract class AppDatabase : RoomDatabase() {
+@Database(entities = [Moneda::class], version = 1, exportSchema = false)
+abstract class MonederoDatabase : RoomDatabase() { // <-- CAMBIADO DE AppDatabase
     abstract fun monedaDao(): MonedaDao
+
+    companion object {
+        @Volatile
+        private var INSTANCE: MonederoDatabase? = null
+
+        fun getDatabase(context: android.content.Context): MonederoDatabase {
+            return INSTANCE ?: synchronized(this) {
+                val instance = Room.databaseBuilder(
+                    context.applicationContext,
+                    MonederoDatabase::class.java,
+                    "monedero_database"
+                ).build()
+                INSTANCE = instance
+                instance
+            }
+        }
+    }
 }
 
 data class EventoMoneda(
@@ -61,48 +80,16 @@ data class EventoMoneda(
 class MonederoViewModel(private val tts: TextToSpeech) : ViewModel() {
     private val _monedas = MutableStateFlow<List<Moneda>>(emptyList())
     val monedas: StateFlow<List<Moneda>> = _monedas
-    
+
     private val _total = MutableStateFlow(0)
     val total: StateFlow<Int> = _total
-    
+
     private val _estadoCloud = MutableStateFlow("Iniciando...")
     val estadoCloud: StateFlow<String> = _estadoCloud
-    
-    private var db: AppDatabase? = null
+
+    private var db: MonederoDatabase? = null // <-- CAMBIADO DE AppDatabase
     private val firebaseDb = FirebaseDatabase.getInstance()
-    private val ref = firebaseDb.getReference("monedero/eventos")
-    private var ultimoTimestampProcesado = 0L
-    
-    init {
-        tts.language = Locale("es", "PE")
-        escucharFirebase()
-    }
-    
-    fun initDb(database: AppDatabase) {
-        db = database
-        cargarDatos()
-    }
-    
-    private fun cargarDatos() {
-        CoroutineScope(Dispatchers.IO).launch {
-            db?.monedaDao()?.getAll()?.let { lista ->
-                _monedas.value = lista
-                val nuevoTotal = lista.sumOf { it.monto }
-                val totalAnterior = _total.value
-                _total.value = nuevoTotal
-                
-                if (nuevoTotal > totalAnterior && lista.firstOrNull()?.origen?.contains("ESP32") == true) {
-                    withContext(Dispatchers.Main) {
-                        hablar("¡Un sol! Nuevo saldo: $nuevoTotal soles")
-                    }
-                }
-            }
-        }
-    }
-    
-    private fun escucharFirebase() {
-        ref.addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
+    // ... resto de tu código del ViewModel sigue igual            override fun onDataChange(snapshot: DataSnapshot) {
                 _estadoCloud.value = "Conectado ☁️"
                 for (eventoSnapshot in snapshot.children) {
                     val evento = eventoSnapshot.getValue(EventoMoneda::class.java)
