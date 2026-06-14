@@ -4,12 +4,6 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.google.firebase.database.FirebaseDatabase
 
-data class Transaccion(
-    val id: String = "",
-    val monto: String = "",
-    val fecha: Long = System.currentTimeMillis()
-)
-
 class YapeListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val pack = sbn.packageName
