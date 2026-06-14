@@ -3,10 +3,6 @@ package com.kilomkolim84rgb.monedero
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -17,11 +13,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
@@ -29,6 +28,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.room.*
+import com.google.firebase.database.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,7 +40,7 @@ data class Moneda(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val montoCentimos: Int,
     val fecha: Long = System.currentTimeMillis(),
-    val origen: String = "Manual"
+    val origen: String = "monedero Paoyhan"
 )
 
 @Dao
@@ -67,6 +67,8 @@ abstract class MonederoDatabase : RoomDatabase() {
     }
 }
 
+data class MonedaRemota(val montoCentimos: Int = 0, val origen: String = "monedero Paoyhan", val timestamp: Long = 0)
+
 class MonederoViewModel : ViewModel() {
     private val _monedas = MutableStateFlow<List<Moneda>>(emptyList())
     val monedas: StateFlow<List<Moneda>> = _monedas
@@ -79,7 +81,7 @@ class MonederoViewModel : ViewModel() {
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch { cargarMonedas() }
     }
 
-    fun insertarMoneda(montoCentimos: Int, origen: String = "Manual") {
+    fun insertarMoneda(montoCentimos: Int, origen: String) {
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             db?.monedaDao()?.insert(Moneda(montoCentimos = montoCentimos, origen = origen))
             cargarMonedas()
@@ -105,17 +107,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private lateinit var tts: TextToSpeech
     private val CHANNEL_ID = "monedero_channel"
     private lateinit var viewModel: MonederoViewModel
-    
-    private val monedaReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            val monto = intent?.getIntExtra("MONTO_CENTIMOS", 0) ?: 0
-            if (monto > 0) {
-                viewModel.insertarMoneda(monto, "ESP32")
-                hablarMoneda(monto)
-                mostrarNotificacion(monto)
-            }
-        }
-    }
+    private lateinit var database: DatabaseReference
     
     private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -128,17 +120,34 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         viewModel = MonederoViewModel()
         viewModel.initDatabase(this)
         
-        registerReceiver(monedaReceiver, IntentFilter("COM.MONEDERO.ADD_MONEDA"), RECEIVER_NOT_EXPORTED)
+        database = FirebaseDatabase.getInstance().getReference("monedas")
+        escucharMonedasRemotas()
         
         setContent {
             MaterialTheme {
-                MonederoScreen(viewModel) { montoCentimos -> 
-                    viewModel.insertarMoneda(montoCentimos, "Manual")
-                    hablarMoneda(montoCentimos)
-                    mostrarNotificacion(montoCentimos)
-                }
+                MonederoScreen(viewModel)
             }
         }
+    }
+    
+    private fun escucharMonedasRemotas() {
+        database.addChildEventListener(object : ChildEventListener {
+            override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
+                val moneda = snapshot.getValue(MonedaRemota::class.java)
+                moneda?.let {
+                    if (it.montoCentimos > 0) {
+                        viewModel.insertarMoneda(it.montoCentimos, it.origen)
+                        hablarMoneda(it.montoCentimos) // Solo audio: "un sol"
+                        mostrarNotificacion(it.montoCentimos, it.origen) // Noti: "Ingreso un sol de monedero Paoyhan"
+                        snapshot.ref.removeValue()
+                    }
+                }
+            }
+            override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) {}
+            override fun onChildRemoved(snapshot: DataSnapshot) {}
+            override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) {}
+            override fun onCancelled(error: DatabaseError) {}
+        })
     }
     
     override fun onInit(status: Int) {
@@ -156,7 +165,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(CHANNEL_ID, "Monedero", NotificationManager.IMPORTANCE_HIGH)
+            val channel = NotificationChannel(CHANNEL_ID, "Monedero Paoyhan", NotificationManager.IMPORTANCE_HIGH)
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
     }
@@ -169,12 +178,17 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         }
     }
     
-    private fun mostrarNotificacion(montoCentimos: Int) {
+    private fun mostrarNotificacion(montoCentimos: Int, origen: String) {
         val montoTexto = "S/ %.2f".format(montoCentimos / 100.0)
+        val montoAudio = when(montoCentimos) {
+            10 -> "diez céntimos"; 20 -> "veinte céntimos"; 50 -> "cincuenta céntimos"
+            100 -> "un sol"; 200 -> "dos soles"; 500 -> "cinco soles"
+            else -> "${montoCentimos / 100.0} soles"
+        }
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("Se agregó una moneda")
-            .setContentText("Ingresó $montoTexto a tu cuenta")
+            .setContentTitle("Ingreso $montoAudio")
+            .setContentText("Desde $origen")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
 
@@ -184,7 +198,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     }
     
     override fun onDestroy() {
-        unregisterReceiver(monedaReceiver)
         tts.stop()
         tts.shutdown()
         super.onDestroy()
@@ -192,58 +205,88 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 }
 
 @Composable
-fun MonederoScreen(viewModel: MonederoViewModel, onMonedaAgregada: (Int) -> Unit) {
+fun MonederoScreen(viewModel: MonederoViewModel) {
     val monedas by viewModel.monedas.collectAsState()
     val totalCentimos by viewModel.totalCentimos.collectAsState()
     val totalSoles = totalCentimos / 100.0
-    var showDialog by remember { mutableStateOf(false) }
+    var showConfirmDialog by remember { mutableStateOf(false) }
+    var showPasswordDialog by remember { mutableStateOf(false) }
+    var password by remember { mutableStateOf("") }
+    var errorPassword by remember { mutableStateOf(false) }
     val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
+    
+    val CLAVE_CORRECTA = "123456" // CAMBIA TU CLAVE AQUÍ - 6 DÍGITOS
 
-    if (showDialog) {
+    if (showConfirmDialog) {
         AlertDialog(
-            onDismissRequest = { showDialog = false },
+            onDismissRequest = { showConfirmDialog = false },
             title = { Text("¿Vaciar monedero?") },
-            text = { Text("Se borrarán todas las monedas. No se puede deshacer.") },
+            text = { Text("Se borrarán todas las monedas. Esta acción requiere clave.") },
             confirmButton = {
-                Button(onClick = { viewModel.borrarTodo(); showDialog = false }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Borrar") }
+                Button(onClick = { showConfirmDialog = false; showPasswordDialog = true }) { Text("Continuar") }
             },
-            dismissButton = { Button(onClick = { showDialog = false }) { Text("Cancelar") } }
+            dismissButton = { Button(onClick = { showConfirmDialog = false }) { Text("Cancelar") } }
+        )
+    }
+
+    if (showPasswordDialog) {
+        AlertDialog(
+            onDismissRequest = { showPasswordDialog = false; password = ""; errorPassword = false },
+            title = { Text("Ingresa clave de 6 dígitos") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { 
+                            if (it.length <= 6) password = it
+                            errorPassword = false
+                        },
+                        label = { Text("Clave") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        visualTransformation = PasswordVisualTransformation(),
+                        isError = errorPassword,
+                        singleLine = true
+                    )
+                    if (errorPassword) Text("Clave incorrecta", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (password == CLAVE_CORRECTA) {
+                        viewModel.borrarTodo()
+                        showPasswordDialog = false
+                        password = ""
+                    } else {
+                        errorPassword = true
+                    }
+                }) { Text("Borrar") }
+            },
+            dismissButton = { Button(onClick = { showPasswordDialog = false; password = "" }) { Text("Cancelar") } }
         )
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("S/ %.2f".format(totalSoles), fontSize = 48.sp, fontWeight = FontWeight.Bold)
-        Text("Total en monedero", fontSize = 14.sp)
+        Text("Monto Total", fontSize = 14.sp)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("Monedero Paoyhan", fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(24.dp))
         
-        Text("Prueba Manual:", fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { onMonedaAgregada(10) }) { Text("S/ 0.10") }
-            Button(onClick = { onMonedaAgregada(20) }) { Text("S/ 0.20") }
-            Button(onClick = { onMonedaAgregada(50) }) { Text("S/ 0.50") }
+        Button(onClick = { showConfirmDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { 
+            Text("Vaciar Monedero") 
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { onMonedaAgregada(100) }) { Text("S/ 1") }
-            Button(onClick = { onMonedaAgregada(200) }) { Text("S/ 2") }
-            Button(onClick = { onMonedaAgregada(500) }) { Text("S/ 5") }
-        }
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(onClick = { showDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Vaciar Monedero") }
         Spacer(modifier = Modifier.height(16.dp))
         Divider()
         Text("Historial - ${monedas.size} monedas", fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
         
         LazyColumn(modifier = Modifier.weight(1f)) {
             items(monedas) { moneda ->
-                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column {
-                        Text("S/ %.2f".format(moneda.montoCentimos / 100.0), fontWeight = FontWeight.Bold)
-                        Text("Origen: ${moneda.origen}", fontSize = 10.sp)
+                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("S/ %.2f".format(moneda.montoCentimos / 100.0), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text(dateFormat.format(Date(moneda.fecha)), fontSize = 12.sp)
                     }
-                    Text(dateFormat.format(Date(moneda.fecha)), fontSize = 12.sp)
+                    Text("Origen: ${moneda.origen}", fontSize = 12.sp)
                 }
                 Divider()
             }
