@@ -4,30 +4,22 @@ import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.room.*
 import com.google.firebase.database.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
 import java.util.*
 
 @Entity
@@ -51,7 +43,7 @@ interface MonedaDao {
 }
 
 @Database(entities = [Moneda::class], version = 1, exportSchema = false)
-abstract class MonederoDatabase : RoomDatabase() { // <-- CAMBIADO DE AppDatabase
+abstract class MonederoDatabase : RoomDatabase() {
     abstract fun monedaDao(): MonedaDao
 
     companion object {
@@ -72,104 +64,44 @@ abstract class MonederoDatabase : RoomDatabase() { // <-- CAMBIADO DE AppDatabas
     }
 }
 
-data class EventoMoneda(
-    val timestamp: Long = 0,
-    val deviceId: String = ""
-)
-
-class MonederoViewModel(private val tts: TextToSpeech) : ViewModel() {
+class MonederoViewModel : ViewModel() {
     private val _monedas = MutableStateFlow<List<Moneda>>(emptyList())
     val monedas: StateFlow<List<Moneda>> = _monedas
 
     private val _total = MutableStateFlow(0)
     val total: StateFlow<Int> = _total
 
-    private val _estadoCloud = MutableStateFlow("Iniciando...")
-    val estadoCloud: StateFlow<String> = _estadoCloud
+    private var db: MonederoDatabase? = null
+    
+    fun initDatabase(context: android.content.Context) {
+        db = MonederoDatabase.getDatabase(context)
+    }
 
-    private var db: MonederoDatabase? = null // <-- CAMBIADO DE AppDatabase
-    private val firebaseDb = FirebaseDatabase.getInstance()
-    // ... resto de tu código del ViewModel sigue igual            override fun onDataChange(snapshot: DataSnapshot) {
-                _estadoCloud.value = "Conectado ☁️"
-                for (eventoSnapshot in snapshot.children) {
-                    val evento = eventoSnapshot.getValue(EventoMoneda::class.java)
-                    if (evento != null && evento.timestamp > ultimoTimestampProcesado) {
-                        ultimoTimestampProcesado = evento.timestamp
-                        agregarMoneda(origen = "ESP32-${evento.deviceId}")
-                        eventoSnapshot.ref.removeValue()
-                    }
-                }
-            }
-            override fun onCancelled(error: DatabaseError) {
-                _estadoCloud.value = "Sin conexión"
-            }
-        })
-    }
-    
-    private fun hablar(texto: String) {
-        tts.speak(texto, TextToSpeech.QUEUE_FLUSH, null, "MONEDA_ID")
-    }
-    
-    fun agregarMoneda(origen: String = "Manual") {
-        CoroutineScope(Dispatchers.IO).launch {
-            db?.monedaDao()?.insert(Moneda(origen = origen))
-            cargarDatos()
+    fun insertarMoneda(monto: Int) {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            db?.monedaDao()?.insert(Moneda(monto = monto))
+            cargarMonedas()
         }
     }
     
-    fun retirarTodo() {
-        CoroutineScope(Dispatchers.IO).launch {
-            db?.monedaDao()?.deleteAll()
-            cargarDatos()
-        }
+    private suspend fun cargarMonedas() {
+        val lista = db?.monedaDao()?.getAll() ?: emptyList()
+        _monedas.value = lista
+        _total.value = lista.sumOf { it.monto }
     }
 }
 
-class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
-    private lateinit var db: AppDatabase
-    private lateinit var tts: TextToSpeech
-    private var viewModel: MonederoViewModel? = null
-    private val ttsReady = mutableStateOf(false)
-    
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        db = Room.databaseBuilder(
-            applicationContext,
-            AppDatabase::class.java, "monedero-db"
-        ).fallbackToDestructiveMigration().build()
-        
-        tts = TextToSpeech(this, this)
+        val viewModel = MonederoViewModel()
+        viewModel.initDatabase(this)
         
         setContent {
             MaterialTheme {
-                if (ttsReady.value && viewModel != null) {
-                    MonederoScreen(viewModel!!)
-                } else {
-                    Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = Color.Cyan)
-                            Spacer(Modifier.height(16.dp))
-                            Text("Iniciando MonederoSmart...", color = Color.White)
-                        }
-                    }
-                }
+                MonederoScreen(viewModel)
             }
         }
-    }
-    
-    override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            viewModel = MonederoViewModel(tts)
-            viewModel?.initDb(db)
-            ttsReady.value = true
-        }
-    }
-    
-    override fun onDestroy() {
-        tts.stop()
-        tts.shutdown()
-        super.onDestroy()
     }
 }
 
@@ -177,74 +109,20 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 fun MonederoScreen(viewModel: MonederoViewModel) {
     val monedas by viewModel.monedas.collectAsState()
     val total by viewModel.total.collectAsState()
-    val estadoCloud by viewModel.estadoCloud.collectAsState()
-    val formato = SimpleDateFormat("dd/MM HH:mm:ss", Locale.getDefault())
     
-    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF000000)) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("MonederoSmart 💰", fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Cloud, contentDescription = "Cloud", tint = Color(0xFF00E5FF))
-                    Spacer(Modifier.width(4.dp))
-                    Text(estadoCloud, color = Color.Gray, fontSize = 12.sp)
-                }
-            }
-            
-            Spacer(Modifier.height(24.dp))
-            Text("Saldo Total", fontSize = 18.sp, color = Color.Gray)
-            Text("S/ $total", fontSize = 48.sp, color = Color(0xFF00FF00), fontWeight = FontWeight.Black)
-            Spacer(Modifier.height(24.dp))
-            
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Button(
-                    onClick = { viewModel.agregarMoneda() },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
-                ) {
-                    Text("Agregar S/1 Prueba", fontSize = 16.sp)
-                }
-                Button(
-                    onClick = { viewModel.retirarTodo() },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF44336))
-                ) {
-                    Text("Retirar Todo", fontSize = 16.sp)
-                }
-            }
-            
-            Spacer(Modifier.height(24.dp))
-            Divider(color = Color(0xFF333333))
-            Text("Historial de Ingresos", color = Color.White, fontSize = 20.sp, modifier = Modifier.padding(vertical = 12.dp))
-            
-            if (monedas.isEmpty()) {
-                Text("Esperando monedas del ESP32...", color = Color.Gray, modifier = Modifier.padding(32.dp))
-            } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(monedas) { moneda ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A))
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text("S/ ${moneda.monto}", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                                    Text(
-                                        moneda.origen, 
-                                        color = if(moneda.origen.contains("ESP32")) Color(0xFF00E5FF) else Color(0xFFFFEB3B), 
-                                        fontSize = 12.sp
-                                    )
-                                }
-                                Text(formato.format(Date(moneda.fecha)), color = Color.Gray, fontSize = 13.sp)
-                            }
-                        }
-                    }
-                }
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Total: S/ $total", fontSize = 32.sp, fontWeight = FontWeight.Bold)
+        
+        Button(onClick = { viewModel.insertarMoneda(1) }) {
+            Text("Agregar S/ 1")
+        }
+        
+        LazyColumn {
+            items(monedas) { moneda ->
+                Text("S/ ${moneda.monto} - ${moneda.origen}")
             }
         }
     }
