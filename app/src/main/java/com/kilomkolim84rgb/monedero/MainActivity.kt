@@ -1,4 +1,4 @@
-package com.kilomkolim84rgb.monederosmart
+package com.kilomkolim84rgb.monedero
 
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
