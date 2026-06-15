@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace 'com.kilomkolim84rgb.monederosmart'
+    namespace 'com.kilomkolim84rgb.monedero'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.kilomkolim84rgb.monederosmart"
+        applicationId "com.kilomkolim84rgb.monedero"
         minSdk 21
         targetSdk 34
         versionCode 1
