@@ -1,0 +1,49 @@
+{
+  "project_info": {
+    "project_number": "933521453563",
+    "firebase_url": "https://monedero-85e25-default-rtdb.firebaseio.com",
+    "project_id": "monedero-85e25",
+    "storage_bucket": "monedero-85e25.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:933521453563:android:5ab4f0c54bfb50a87d9b5e",
+        "android_client_info": {
+          "package_name": "com.kilomkolim84rgb.monedero"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDl99Nnw7q7l_K9DCfp1N-K7nsPE5gIl6A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:933521453563:android:880ddf7b61eedf547d9b5e",
+        "android_client_info": {
+          "package_name": "com.kilomkolim84rgb.monederoemisor"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDl99Nnw7q7l_K9DCfp1N-K7nsPE5gIl6A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
