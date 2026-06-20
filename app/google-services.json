@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "90371020362",
+    "firebase_url": "https://monedero-soles-default-rtdb.firebaseio.com",
+    "project_id": "monedero-soles",
+    "storage_bucket": "monedero-soles.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:90371020362:android:79c016b8222ca46966b8b3",
+        "android_client_info": {
+          "package_name": "com.example.appemisoramonedero"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCizz3SCDhvoZM2pdmLqM7wXUA0HkudIvk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
