@@ -9,7 +9,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            Text("SI VES ESTO, YA ABRE")
+            Text("AHORA SÍ ABRE CTM")
         }
     }
 }
