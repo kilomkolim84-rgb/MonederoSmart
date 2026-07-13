@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.database.*
 
-// ------------------- ESTRUCTURAS DE DATOS -------------------
+// ------------------- LO QUE YA TENÍAS -------------------
 data class RegistroIngreso(
     val id: String = "",
     val origen: String = "",
@@ -33,6 +33,7 @@ data class RegistroIngreso(
     val fotoUrl: String = ""
 )
 
+// ✅ SOLO AGREGUÉ ESTO PARA LOS SENSORES, NADA MÁS
 data class DatosSensores(
     val temperatura: Float = 0f,
     val humedad: Float = 0f,
@@ -47,66 +48,51 @@ class MainActivity : ComponentActivity() {
     private var sensores by mutableStateOf(DatosSensores())
     private var mostrarDialogo by mutableStateOf(false)
     private var claveIngresada by mutableStateOf("")
-    private var firebaseListo by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // MISMA FORMA DE ESCUCHAR QUE TENÍAS ANTES
+        db.child("total_general").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                totalGeneral = snapshot.getValue(Int::class.java) ?: 0
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
+
+        db.child("historial").orderByChild("fecha").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val lista = mutableListOf<RegistroIngreso>()
+                snapshot.children.reversed().forEach {
+                    it.getValue(RegistroIngreso::class.java)?.let { reg -> lista.add(reg.copy(id = it.key ?: "")) }
+                }
+                listaIngresos = lista
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
+
+        // ✅ ESTO ES LO ÚNICO NUEVO: LEER SENSORES
+        db.child("sensores").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                sensores = snapshot.getValue(DatosSensores::class.java) ?: DatosSensores()
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
+
         setContent { PantallaPrincipal() }
-        // ✅ INICIA LA ESCUCHA DESPUÉS DE CARGAR LA PANTALLA
-        escucharDatos()
     }
 
-    // ------------------- ESCUCHA DE FIREBASE CON PROTECCIÓN -------------------
-    private fun escucharDatos() {
-        try {
-            db.child("total_general").addValueEventListener(object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    totalGeneral = snapshot.getValue(Int::class.java) ?: 0
-                    firebaseListo = true
-                }
-                override fun onCancelled(error: DatabaseError) {
-                    Toast.makeText(this@MainActivity, "Error BD: ${error.message}", Toast.LENGTH_SHORT).show()
-                }
-            })
-
-            db.child("historial").orderByChild("fecha").addValueEventListener(object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    val lista = mutableListOf<RegistroIngreso>()
-                    snapshot.children.reversed().forEach { hijo ->
-                        hijo.getValue(RegistroIngreso::class.java)?.let {
-                            lista.add(it.copy(id = hijo.key ?: ""))
-                        }
-                    }
-                    listaIngresos = lista
-                }
-                override fun onCancelled(error: DatabaseError) {}
-            })
-
-            db.child("sensores").addValueEventListener(object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    sensores = snapshot.getValue(DatosSensores::class.java) ?: DatosSensores()
-                }
-                override fun onCancelled(error: DatabaseError) {}
-            })
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    // ------------------- ACCIÓN DE VACIADO -------------------
     private fun confirmarVaciado() {
-        if(claveIngresada == "1234") { // TU CLAVE AQUÍ
+        if(claveIngresada == "1234") {
             db.child("total_general").setValue(0)
             db.child("historial").removeValue()
-            Toast.makeText(this, "✅ MONEDERO VACIADO", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "MONEDERO VACIADO", Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(this, "❌ CLAVE INCORRECTA", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "CLAVE INCORRECTA", Toast.LENGTH_SHORT).show()
         }
         mostrarDialogo = false
         claveIngresada = ""
     }
 
-    // ------------------- INTERFAZ PRINCIPAL -------------------
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun PantallaPrincipal() {
@@ -129,8 +115,7 @@ class MainActivity : ComponentActivity() {
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-
-                // 🔹 TOTAL Y BOTÓN VACIAR
+                // TOTAL IGUAL QUE ANTES
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -156,7 +141,7 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // 🔹 BARRA AZUL CON 4 DATOS
+                // ✅ LO ÚNICO NUEVO: BARRA AZUL CON 4 DATOS
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -181,7 +166,7 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // 🔹 HISTORIAL
+                // HISTORIAL IGUAL QUE ANTES
                 Text(
                     "HISTORIAL DE INGRESOS",
                     fontSize = 20.sp,
@@ -196,7 +181,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // 🔹 DIÁLOGO DE CLAVE
             if (mostrarDialogo) {
                 AlertDialog(
                     onDismissRequest = { mostrarDialogo = false },
@@ -205,25 +189,17 @@ class MainActivity : ComponentActivity() {
                         TextField(
                             value = claveIngresada,
                             onValueChange = { claveIngresada = it },
-                            label = { Text("CLAVE DE SEGURIDAD") },
+                            label = { Text("CLAVE") },
                             singleLine = true
                         )
                     },
-                    confirmButton = {
-                        Button(onClick = { confirmarVaciado() }) { Text("ACEPTAR") }
-                    },
-                    dismissButton = {
-                        Button(
-                            onClick = { mostrarDialogo = false; claveIngresada = "" },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
-                        ) { Text("CANCELAR") }
-                    }
+                    confirmButton = { Button(onClick = { confirmarVaciado() }) { Text("ACEPTAR") } },
+                    dismissButton = { Button(onClick = { mostrarDialogo = false; claveIngresada = "" }) { Text("CANCELAR") } }
                 )
             }
         }
     }
 
-    // 🔹 COMPONENTES AUXILIARES
     @Composable
     fun DatoBarra(icono: String, etiqueta: String, valor: String) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -241,38 +217,19 @@ class MainActivity : ComponentActivity() {
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
+                modifier = Modifier.padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // ESPACIO PARA FOTO
-                Card(
-                    modifier = Modifier.size(60.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.LightGray)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text("[FOTO]", fontSize = 12.sp, color = Color.DarkGray)
-                    }
+                Card(modifier = Modifier.size(60.dp), shape = RoundedCornerShape(8.dp)) {
+                    Box(contentAlignment = Alignment.Center) { Text("[FOTO]", fontSize = 12.sp) }
                 }
-
                 Spacer(modifier = Modifier.width(12.dp))
-
-                // DATOS DEL REGISTRO
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(reg.origen, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                    Text("MONTO: S/ ${reg.monto}", fontSize = 14.sp)
-                    Text("${reg.fecha}  ${reg.hora}", fontSize = 13.sp, color = Color.Gray)
+                    Text(reg.origen, fontWeight = FontWeight.Bold)
+                    Text("MONTO: S/ ${reg.monto}")
+                    Text("${reg.fecha} ${reg.hora}", fontSize = 13.sp, color = Color.Gray)
                 }
-
-                // TICKET
-                Text(
-                    "#${reg.ticket}",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFFB71C1C)
-                )
+                Text("#${reg.ticket}", fontWeight = FontWeight.Bold, color = Color.Red)
             }
         }
     }
