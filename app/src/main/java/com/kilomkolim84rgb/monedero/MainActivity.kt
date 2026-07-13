@@ -51,6 +51,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private lateinit var refTotal: DatabaseReference
     private lateinit var refHistorial: DatabaseReference
     private val CHANNEL_ID = "monedero_channel"
+    private var ttsListo = false
 
     private var totalActual by mutableStateOf(0)
     private var listaHistorial by mutableStateOf(listOf<Registro>())
@@ -70,12 +71,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         createNotificationChannel()
         pedirPermisos()
 
-        // CONEXIÓN A TU FIREBASE
         db = FirebaseDatabase.getInstance("https://ciber-cesarin-default-rtdb.firebaseio.com/")
         refTotal = db.getReference("total_general")
         refHistorial = db.getReference("historial")
 
-        // ESCUCHA CAMBIOS EN TIEMPO REAL
         refTotal.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 totalActual = snapshot.getValue(Int::class.java) ?: 0
@@ -116,6 +115,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         return if(claveIngresada == CLAVE_VACIAR){
             totalActual = 0
             refTotal.setValue(0)
+            refHistorial.removeValue() // ✅ BORRA TAMBIÉN EL HISTORIAL DE FIREBASE
+            Toast.makeText(this, "✅ Monedero vaciado correctamente", Toast.LENGTH_SHORT).show()
             true
         } else {
             Toast.makeText(this, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
@@ -123,14 +124,32 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         }
     }
 
+    // ✅ HABLA CUALQUIER CANTIDAD HASTA DONDE SEA
     private fun hablar(monto: Int) {
+        if (!ttsListo) return
         val texto = when(monto){
             1 -> "Un sol"
             2 -> "Dos soles"
             3 -> "Tres soles"
             4 -> "Cuatro soles"
             5 -> "Cinco soles"
-            else -> "$monto soles"
+            6 -> "Seis soles"
+            7 -> "Siete soles"
+            8 -> "Ocho soles"
+            9 -> "Nueve soles"
+            10 -> "Diez soles"
+            11 -> "Once soles"
+            12 -> "Doce soles"
+            13 -> "Trece soles"
+            14 -> "Catorce soles"
+            15 -> "Quince soles"
+            16 -> "Dieciséis soles"
+            17 -> "Diecisiete soles"
+            18 -> "Dieciocho soles"
+            19 -> "Diecinueve soles"
+            20 -> "Veinte soles"
+            50 -> "Cincuenta soles"
+            else -> "$monto soles" // PARA LO QUE SEA MÁS, LO DICE TAL CUAL
         }
         tts.speak(texto, TextToSpeech.QUEUE_FLUSH, null, null)
     }
@@ -139,7 +158,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         val noti = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("✅ INGRESO REGISTRADO")
-            .setContentText("Entraron $monto soles | Total: $totalActual soles")
+            .setContentText("Entraron $monto soles | Total acumulado: $totalActual soles")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
         if(ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED){
@@ -148,7 +167,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     }
 
     override fun onInit(status: Int) {
-        if(status == TextToSpeech.SUCCESS) tts.language = Locale("es", "PE")
+        if(status == TextToSpeech.SUCCESS){
+            tts.language = Locale("es", "PE")
+            ttsListo = true
+        }
     }
 
     private fun createNotificationChannel() {
@@ -173,7 +195,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         super.onDestroy()
     }
 
-    // ------------------- PANTALLA CORREGIDA SIN ERRORES -------------------
     @Composable
     fun PantallaMonedero(){
         val formato = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
@@ -204,7 +225,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
         Column(
             modifier = Modifier.fillMaxSize().padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally // ✅ CORREGIDO AQUÍ
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("S/ $totalActual", fontSize = 52.sp, fontWeight = FontWeight.Bold)
             Text("Total acumulado", fontSize = 16.sp)
