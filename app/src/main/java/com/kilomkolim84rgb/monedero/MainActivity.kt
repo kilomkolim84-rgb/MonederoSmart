@@ -1,12 +1,8 @@
 package com.kilomkolim84rgb.monedero
 
-import android.app.AlertDialog
-import android.content.Intent
-import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,15 +16,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.database.*
-import java.text.SimpleDateFormat
-import java.util.*
 
 // ------------------- DATOS DE FIREBASE -------------------
 data class RegistroIngreso(
@@ -53,7 +45,8 @@ class MainActivity : ComponentActivity() {
     private var totalGeneral by mutableStateOf(0)
     private var listaIngresos by mutableStateOf(listOf<RegistroIngreso>())
     private var sensores by mutableStateOf(DatosSensores())
-    private var dialogoAbierto by mutableStateOf(false)
+    private var mostrarDialogo by mutableStateOf(false)
+    private var claveIngresada by mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,7 +58,6 @@ class MainActivity : ComponentActivity() {
 
     // ------------------- ESCUCHA TODO LO DE FIREBASE -------------------
     private fun escucharDatos() {
-        // Total acumulado
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 totalGeneral = snapshot.getValue(Int::class.java) ?: 0
@@ -73,20 +65,17 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(error: DatabaseError) {}
         })
 
-        // Historial de ingresos
         db.child("historial").orderByChild("fecha").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val lista = mutableListOf<RegistroIngreso>()
                 for(hijo in snapshot.children.reversed()){
-                    val reg = hijo.getValue(RegistroIngreso::class.java)
-                    reg?.let { lista.add(it.copy(id = hijo.key ?: "")) }
+                    hijo.getValue(RegistroIngreso::class.java)?.let { lista.add(it.copy(id = hijo.key ?: "")) }
                 }
                 listaIngresos = lista
             }
             override fun onCancelled(error: DatabaseError) {}
         })
 
-        // Datos de sensores
         db.child("sensores").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 sensores = snapshot.getValue(DatosSensores::class.java) ?: DatosSensores()
@@ -96,23 +85,16 @@ class MainActivity : ComponentActivity() {
     }
 
     // ------------------- VACIAR MONEDERO CON CLAVE -------------------
-    private fun vaciarMonedero() {
-        AlertDialog.Builder(this)
-            .setTitle("CONFIRMAR VACIADO")
-            .setMessage("Escribe la clave de seguridad para borrar todo:")
-            .setView(android.widget.EditText(this).apply { hint = "Clave" })
-            .setPositiveButton("ACEPTAR") { _, _ ->
-                val clave = (dialogoAbierto as AlertDialog).findViewById<android.widget.EditText>(android.R.id.message)?.text.toString()
-                if(clave == "1234"){ // ✅ CAMBIA TU CLAVE AQUÍ
-                    db.child("total_general").setValue(0)
-                    db.child("historial").removeValue()
-                    Toast.makeText(this@MainActivity, "MONEDERO VACIADO", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(this@MainActivity, "CLAVE INCORRECTA", Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setNegativeButton("CANCELAR", null)
-            .show()
+    private fun confirmarVaciado(){
+        if(claveIngresada == "1234"){ // ✅ TU CLAVE AQUÍ
+            db.child("total_general").setValue(0)
+            db.child("historial").removeValue()
+            Toast.makeText(this, "✅ MONEDERO VACIADO CORRECTAMENTE", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "❌ CLAVE INCORRECTA", Toast.LENGTH_SHORT).show()
+        }
+        mostrarDialogo = false
+        claveIngresada = ""
     }
 
     // ------------------- DISEÑO DE LA PANTALLA -------------------
@@ -153,7 +135,7 @@ class MainActivity : ComponentActivity() {
                         Text("TOTAL ACUMULADO", fontSize = 16.sp, color = Color.Gray)
                     }
                     IconButton(
-                        onClick = { dialogoAbierto = true },
+                        onClick = { mostrarDialogo = true },
                         modifier = Modifier
                             .size(64.dp)
                             .background(Color(0xFFD32F2F), shape = RoundedCornerShape(12.dp))
@@ -208,39 +190,29 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // 🔹 DIÁLOGO DE CONFIRMACIÓN
-            if(dialogoAbierto){
+            // 🔹 DIÁLOGO DE CONFIRMACIÓN ARREGLADO
+            if(mostrarDialogo){
                 AlertDialog(
-                    onDismissRequest = { dialogoAbierto = false },
+                    onDismissRequest = { mostrarDialogo = false },
                     title = { Text("VACIAR MONEDERO") },
                     text = {
-                        Column {
-                            Text("Escribe la clave de seguridad:")
-                            Spacer(modifier = Modifier.height(8.dp))
-                            var clave by remember { mutableStateOf("") }
-                            TextField(
-                                value = clave,
-                                onValueChange = { clave = it },
-                                label = { Text("CLAVE") },
-                                singleLine = true
-                            )
-                        }
+                        TextField(
+                            value = claveIngresada,
+                            onValueChange = { claveIngresada = it },
+                            label = { Text("CLAVE DE SEGURIDAD") },
+                            singleLine = true
+                        )
                     },
                     confirmButton = {
-                        Button(onClick = {
-                            val clave = "" // Aquí se toma el valor del campo
-                            if(clave == "1234"){ // TU CLAVE
-                                db.child("total_general").setValue(0)
-                                db.child("historial").removeValue()
-                                Toast.makeText(this@MainActivity, "VACIADO CORRECTO", Toast.LENGTH_SHORT).show()
-                                dialogoAbierto = false
-                            } else {
-                                Toast.makeText(this@MainActivity, "CLAVE ERRADA", Toast.LENGTH_SHORT).show()
-                            }
-                        }) { Text("ACEPTAR") }
+                        Button(onClick = { confirmarVaciado() }) {
+                            Text("ACEPTAR")
+                        }
                     },
                     dismissButton = {
-                        Button(onClick = { dialogoAbierto = false }, colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)) {
+                        Button(
+                            onClick = { mostrarDialogo = false; claveIngresada = "" },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
+                        ) {
                             Text("CANCELAR")
                         }
                     }
@@ -279,12 +251,8 @@ class MainActivity : ComponentActivity() {
                     shape = RoundedCornerShape(8.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.LightGray)
                 ) {
-                    if(reg.fotoUrl.isNotEmpty()){
-                        // Aquí cuando tengas la cámara cargas la imagen
-                    } else {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text("[FOTO]", fontSize = 12.sp, color = Color.DarkGray)
-                        }
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("[FOTO]", fontSize = 12.sp, color = Color.DarkGray)
                     }
                 }
 
