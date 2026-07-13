@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.database.*
 
-// ------------------- LO QUE YA TENÍAS -------------------
+// ------------------- ESTRUCTURAS DE DATOS -------------------
 data class RegistroIngreso(
     val id: String = "",
     val origen: String = "",
@@ -33,7 +33,6 @@ data class RegistroIngreso(
     val fotoUrl: String = ""
 )
 
-// ✅ SOLO AGREGUÉ ESTO PARA LOS SENSORES, NADA MÁS
 data class DatosSensores(
     val temperatura: Float = 0f,
     val humedad: Float = 0f,
@@ -51,7 +50,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // MISMA FORMA DE ESCUCHAR QUE TENÍAS ANTES
+        // ESCUCHA DE DATOS IGUAL QUE ANTES
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 totalGeneral = snapshot.getValue(Int::class.java) ?: 0
@@ -63,14 +62,16 @@ class MainActivity : ComponentActivity() {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val lista = mutableListOf<RegistroIngreso>()
                 snapshot.children.reversed().forEach {
-                    it.getValue(RegistroIngreso::class.java)?.let { reg -> lista.add(reg.copy(id = it.key ?: "")) }
+                    it.getValue(RegistroIngreso::class.java)?.let { reg ->
+                        lista.add(reg.copy(id = it.key ?: ""))
+                    }
                 }
                 listaIngresos = lista
             }
             override fun onCancelled(error: DatabaseError) {}
         })
 
-        // ✅ ESTO ES LO ÚNICO NUEVO: LEER SENSORES
+        // LECTURA DE SENSORES SIN ERRORES
         db.child("sensores").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 sensores = snapshot.getValue(DatosSensores::class.java) ?: DatosSensores()
@@ -81,18 +82,20 @@ class MainActivity : ComponentActivity() {
         setContent { PantallaPrincipal() }
     }
 
+    // FUNCIÓN DE VACIADO
     private fun confirmarVaciado() {
-        if(claveIngresada == "1234") {
+        if(claveIngresada == "1234") { // PON TU CLAVE AQUÍ
             db.child("total_general").setValue(0)
             db.child("historial").removeValue()
-            Toast.makeText(this, "MONEDERO VACIADO", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "✅ MONEDERO VACIADO", Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(this, "CLAVE INCORRECTA", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "❌ CLAVE INCORRECTA", Toast.LENGTH_SHORT).show()
         }
         mostrarDialogo = false
         claveIngresada = ""
     }
 
+    // PANTALLA PRINCIPAL COMPLETA
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun PantallaPrincipal() {
@@ -115,7 +118,8 @@ class MainActivity : ComponentActivity() {
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // TOTAL IGUAL QUE ANTES
+
+                // 🔹 TOTAL Y BOTÓN VACIADO
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -141,7 +145,7 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // ✅ LO ÚNICO NUEVO: BARRA AZUL CON 4 DATOS
+                // 🔹 BARRA AZUL ARREGLADA: SIN ICONOS, SOLO TEXTO
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -154,19 +158,19 @@ class MainActivity : ComponentActivity() {
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        DatoBarra("🌡️", "TEMP", "${sensores.temperatura}°C")
+                        DatoBarra("TEMP", "${sensores.temperatura}°C")
                         Divider(modifier = Modifier.height(40.dp), color = Color.White.copy(alpha = 0.3f))
-                        DatoBarra("💧", "HUM", "${sensores.humedad}%")
+                        DatoBarra("HUM", "${sensores.humedad}%")
                         Divider(modifier = Modifier.height(40.dp), color = Color.White.copy(alpha = 0.3f))
-                        DatoBarra("⚡", "RAYOS", "${sensores.rayos}km")
+                        DatoBarra("RAYOS", "${sensores.rayos}")
                         Divider(modifier = Modifier.height(40.dp), color = Color.White.copy(alpha = 0.3f))
-                        DatoBarra("🔌", "VOLT", "${sensores.voltaje}V")
+                        DatoBarra("VOLT", "${sensores.voltaje}V")
                     }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // HISTORIAL IGUAL QUE ANTES
+                // 🔹 HISTORIAL
                 Text(
                     "HISTORIAL DE INGRESOS",
                     fontSize = 20.sp,
@@ -181,6 +185,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // 🔹 DIÁLOGO DE CLAVE
             if (mostrarDialogo) {
                 AlertDialog(
                     onDismissRequest = { mostrarDialogo = false },
@@ -189,26 +194,34 @@ class MainActivity : ComponentActivity() {
                         TextField(
                             value = claveIngresada,
                             onValueChange = { claveIngresada = it },
-                            label = { Text("CLAVE") },
+                            label = { Text("CLAVE DE SEGURIDAD") },
                             singleLine = true
                         )
                     },
-                    confirmButton = { Button(onClick = { confirmarVaciado() }) { Text("ACEPTAR") } },
-                    dismissButton = { Button(onClick = { mostrarDialogo = false; claveIngresada = "" }) { Text("CANCELAR") } }
+                    confirmButton = {
+                        Button(onClick = { confirmarVaciado() }) { Text("ACEPTAR") }
+                    },
+                    dismissButton = {
+                        Button(
+                            onClick = { mostrarDialogo = false; claveIngresada = "" },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
+                        ) { Text("CANCELAR") }
+                    }
                 )
             }
         }
     }
 
+    // 🔹 COMPONENTE DE DATOS SIN ICONOS
     @Composable
-    fun DatoBarra(icono: String, etiqueta: String, valor: String) {
+    fun DatoBarra(etiqueta: String, valor: String) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(icono, fontSize = 24.sp, color = Color.White)
             Text(etiqueta, fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Medium)
             Text(valor, fontSize = 16.sp, color = Color.White, fontWeight = FontWeight.Bold)
         }
     }
 
+    // 🔹 TARJETA DE REGISTRO
     @Composable
     fun TarjetaRegistro(reg: RegistroIngreso) {
         Card(
@@ -217,19 +230,38 @@ class MainActivity : ComponentActivity() {
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Row(
-                modifier = Modifier.padding(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Card(modifier = Modifier.size(60.dp), shape = RoundedCornerShape(8.dp)) {
-                    Box(contentAlignment = Alignment.Center) { Text("[FOTO]", fontSize = 12.sp) }
+                // ESPACIO PARA FOTO
+                Card(
+                    modifier = Modifier.size(60.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.LightGray)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("[FOTO]", fontSize = 12.sp, color = Color.DarkGray)
+                    }
                 }
+
                 Spacer(modifier = Modifier.width(12.dp))
+
+                // DATOS DEL REGISTRO
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(reg.origen, fontWeight = FontWeight.Bold)
-                    Text("MONTO: S/ ${reg.monto}")
-                    Text("${reg.fecha} ${reg.hora}", fontSize = 13.sp, color = Color.Gray)
+                    Text(reg.origen, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text("MONTO: S/ ${reg.monto}", fontSize = 14.sp)
+                    Text("${reg.fecha}  ${reg.hora}", fontSize = 13.sp, color = Color.Gray)
                 }
-                Text("#${reg.ticket}", fontWeight = FontWeight.Bold, color = Color.Red)
+
+                // TICKET
+                Text(
+                    "#${reg.ticket}",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFB71C1C)
+                )
             }
         }
     }
