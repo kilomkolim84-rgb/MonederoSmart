@@ -1,5 +1,6 @@
 package com.kilomkolim84rgb.monedero
 
+import android.os.Bundle // ✅ ESTE FALTABA, LO AGREGUÉ
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,12 +18,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.database.*
 
-// ------------------- DATOS DE FIREBASE -------------------
+// ------------------- ESTRUCTURAS DE DATOS -------------------
 data class RegistroIngreso(
     val id: String = "",
     val origen: String = "",
@@ -51,12 +51,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         escucharDatos()
-        setContent {
-            PantallaPrincipal()
-        }
+        setContent { PantallaPrincipal() }
     }
 
-    // ------------------- ESCUCHA TODO LO DE FIREBASE -------------------
+    // ------------------- ESCUCHA DE FIREBASE -------------------
     private fun escucharDatos() {
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -68,8 +66,10 @@ class MainActivity : ComponentActivity() {
         db.child("historial").orderByChild("fecha").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val lista = mutableListOf<RegistroIngreso>()
-                for(hijo in snapshot.children.reversed()){
-                    hijo.getValue(RegistroIngreso::class.java)?.let { lista.add(it.copy(id = hijo.key ?: "")) }
+                snapshot.children.reversed().forEach { hijo ->
+                    hijo.getValue(RegistroIngreso::class.java)?.let {
+                        lista.add(it.copy(id = hijo.key ?: ""))
+                    }
                 }
                 listaIngresos = lista
             }
@@ -84,12 +84,12 @@ class MainActivity : ComponentActivity() {
         })
     }
 
-    // ------------------- VACIAR MONEDERO CON CLAVE -------------------
-    private fun confirmarVaciado(){
-        if(claveIngresada == "1234"){ // ✅ TU CLAVE AQUÍ
+    // ------------------- ACCIÓN DE VACIADO -------------------
+    private fun confirmarVaciado() {
+        if(claveIngresada == "1234") { // ✅ PON TU CLAVE AQUÍ
             db.child("total_general").setValue(0)
             db.child("historial").removeValue()
-            Toast.makeText(this, "✅ MONEDERO VACIADO CORRECTAMENTE", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "✅ MONEDERO VACIADO", Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(this, "❌ CLAVE INCORRECTA", Toast.LENGTH_SHORT).show()
         }
@@ -97,9 +97,9 @@ class MainActivity : ComponentActivity() {
         claveIngresada = ""
     }
 
-    // ------------------- DISEÑO DE LA PANTALLA -------------------
+    // ------------------- INTERFAZ PRINCIPAL -------------------
     @Composable
-    fun PantallaPrincipal(){
+    fun PantallaPrincipal() {
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -146,7 +146,7 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // 🔹 BARRA AZUL CON LOS 4 DATOS
+                // 🔹 BARRA AZUL CON 4 DATOS
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -171,27 +171,23 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // 🔹 TÍTULO HISTORIAL
+                // 🔹 HISTORIAL
                 Text(
                     "HISTORIAL DE INGRESOS",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Start
+                    modifier = Modifier.fillMaxWidth()
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // 🔹 LISTA DE REGISTROS
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)){
-                    items(listaIngresos){ reg ->
-                        TarjetaRegistro(reg)
-                    }
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(listaIngresos) { reg -> TarjetaRegistro(reg) }
                 }
             }
 
-            // 🔹 DIÁLOGO DE CONFIRMACIÓN ARREGLADO
-            if(mostrarDialogo){
+            // 🔹 DIÁLOGO DE CLAVE
+            if (mostrarDialogo) {
                 AlertDialog(
                     onDismissRequest = { mostrarDialogo = false },
                     title = { Text("VACIAR MONEDERO") },
@@ -204,26 +200,22 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     confirmButton = {
-                        Button(onClick = { confirmarVaciado() }) {
-                            Text("ACEPTAR")
-                        }
+                        Button(onClick = { confirmarVaciado() }) { Text("ACEPTAR") }
                     },
                     dismissButton = {
                         Button(
                             onClick = { mostrarDialogo = false; claveIngresada = "" },
                             colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
-                        ) {
-                            Text("CANCELAR")
-                        }
+                        ) { Text("CANCELAR") }
                     }
                 )
             }
         }
     }
 
-    // 🔹 COMPONENTE PARA CADA DATO EN LA BARRA AZUL
+    // 🔹 COMPONENTES AUXILIARES
     @Composable
-    fun DatoBarra(icono: String, etiqueta: String, valor: String){
+    fun DatoBarra(icono: String, etiqueta: String, valor: String) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(icono, fontSize = 24.sp, color = Color.White)
             Text(etiqueta, fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Medium)
@@ -231,9 +223,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // 🔹 TARJETA DE CADA INGRESO
     @Composable
-    fun TarjetaRegistro(reg: RegistroIngreso){
+    fun TarjetaRegistro(reg: RegistroIngreso) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
@@ -265,7 +256,7 @@ class MainActivity : ComponentActivity() {
                     Text("${reg.fecha}  ${reg.hora}", fontSize = 13.sp, color = Color.Gray)
                 }
 
-                // NÚMERO DE TICKET
+                // TICKET
                 Text(
                     "#${reg.ticket}",
                     fontSize = 16.sp,
