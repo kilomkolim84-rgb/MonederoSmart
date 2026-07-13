@@ -34,7 +34,7 @@ import java.util.*
 
 // ------------------- TU CONFIGURACIÓN -------------------
 const val CLAVE_VACIAR = "1234" // CAMBIA ESTA CLAVE POR LA TUYA
-const val ORIGEN_MONEDERO = "Ciber Cesarín - Monedero"
+const val ORIGEN_MONEDERO = "ESP32 - Monedero"
 // ---------------------------------------------------------
 
 data class Registro(
@@ -67,6 +67,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // ✅ INICIA LA VOZ DE INMEDIATO
         tts = TextToSpeech(this, this)
         createNotificationChannel()
         pedirPermisos()
@@ -82,6 +83,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             override fun onCancelled(error: DatabaseError) {}
         })
 
+        // ✅ ESCUCHA EL HISTORIAL EN TIEMPO REAL
         refHistorial.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val temp = mutableListOf<Registro>()
@@ -106,7 +108,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         totalActual += monto
         refTotal.setValue(totalActual)
         val nuevo = Registro(monto = monto)
-        refHistorial.push().setValue(nuevo)
+        refHistorial.push().setValue(nuevo) // ✅ GUARDA SEGURO EN FIREBASE
         hablar(monto)
         aviso(monto)
     }
@@ -115,8 +117,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         return if(claveIngresada == CLAVE_VACIAR){
             totalActual = 0
             refTotal.setValue(0)
-            refHistorial.removeValue() // ✅ BORRA TAMBIÉN EL HISTORIAL DE FIREBASE
-            Toast.makeText(this, "✅ Monedero vaciado correctamente", Toast.LENGTH_SHORT).show()
+            refHistorial.removeValue() // ✅ BORRA TODO EL HISTORIAL TAMBIÉN
+            Toast.makeText(this, "✅ Monedero vaciado", Toast.LENGTH_SHORT).show()
             true
         } else {
             Toast.makeText(this, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
@@ -124,7 +126,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    // ✅ HABLA CUALQUIER CANTIDAD HASTA DONDE SEA
     private fun hablar(monto: Int) {
         if (!ttsListo) return
         val texto = when(monto){
@@ -143,22 +144,18 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             13 -> "Trece soles"
             14 -> "Catorce soles"
             15 -> "Quince soles"
-            16 -> "Dieciséis soles"
-            17 -> "Diecisiete soles"
-            18 -> "Dieciocho soles"
-            19 -> "Diecinueve soles"
             20 -> "Veinte soles"
             50 -> "Cincuenta soles"
-            else -> "$monto soles" // PARA LO QUE SEA MÁS, LO DICE TAL CUAL
+            else -> "$monto soles"
         }
-        tts.speak(texto, TextToSpeech.QUEUE_FLUSH, null, null)
+        tts.speak(texto, TextToSpeech.QUEUE_ADD, null, null)
     }
 
     private fun aviso(monto: Int){
         val noti = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("✅ INGRESO REGISTRADO")
-            .setContentText("Entraron $monto soles | Total acumulado: $totalActual soles")
+            .setContentTitle("✅ INGRESO")
+            .setContentText("Entraron $monto soles | Total: $totalActual")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
         if(ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED){
@@ -204,12 +201,12 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         if(pedirClave){
             AlertDialog(
                 onDismissRequest = { pedirClave = false },
-                title = { Text("INGRESE CLAVE DE SEGURIDAD") },
+                title = { Text("INGRESE CLAVE") },
                 text = {
                     TextField(
                         value = textoClave,
                         onValueChange = { textoClave = it },
-                        label = { Text("Escriba la clave") },
+                        label = { Text("Clave") },
                         visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
                     )
                 },
@@ -217,7 +214,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     Button(onClick = {
                         if(vaciarConClave(textoClave)) pedirClave = false
                         textoClave = ""
-                    }) { Text("CONFIRMAR") }
+                    }) { Text("ACEPTAR") }
                 },
                 dismissButton = { Button({ pedirClave = false }) { Text("CANCELAR") } }
             )
