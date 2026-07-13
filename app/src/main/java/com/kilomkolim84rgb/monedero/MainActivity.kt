@@ -47,41 +47,50 @@ class MainActivity : ComponentActivity() {
     private var sensores by mutableStateOf(DatosSensores())
     private var mostrarDialogo by mutableStateOf(false)
     private var claveIngresada by mutableStateOf("")
+    private var firebaseListo by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        escucharDatos()
         setContent { PantallaPrincipal() }
+        // ✅ INICIA LA ESCUCHA DESPUÉS DE CARGAR LA PANTALLA
+        escucharDatos()
     }
 
-    // ------------------- ESCUCHA DE FIREBASE -------------------
+    // ------------------- ESCUCHA DE FIREBASE CON PROTECCIÓN -------------------
     private fun escucharDatos() {
-        db.child("total_general").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                totalGeneral = snapshot.getValue(Int::class.java) ?: 0
-            }
-            override fun onCancelled(error: DatabaseError) {}
-        })
-
-        db.child("historial").orderByChild("fecha").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val lista = mutableListOf<RegistroIngreso>()
-                snapshot.children.reversed().forEach { hijo ->
-                    hijo.getValue(RegistroIngreso::class.java)?.let {
-                        lista.add(it.copy(id = hijo.key ?: ""))
-                    }
+        try {
+            db.child("total_general").addValueEventListener(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    totalGeneral = snapshot.getValue(Int::class.java) ?: 0
+                    firebaseListo = true
                 }
-                listaIngresos = lista
-            }
-            override fun onCancelled(error: DatabaseError) {}
-        })
+                override fun onCancelled(error: DatabaseError) {
+                    Toast.makeText(this@MainActivity, "Error BD: ${error.message}", Toast.LENGTH_SHORT).show()
+                }
+            })
 
-        db.child("sensores").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                sensores = snapshot.getValue(DatosSensores::class.java) ?: DatosSensores()
-            }
-            override fun onCancelled(error: DatabaseError) {}
-        })
+            db.child("historial").orderByChild("fecha").addValueEventListener(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val lista = mutableListOf<RegistroIngreso>()
+                    snapshot.children.reversed().forEach { hijo ->
+                        hijo.getValue(RegistroIngreso::class.java)?.let {
+                            lista.add(it.copy(id = hijo.key ?: ""))
+                        }
+                    }
+                    listaIngresos = lista
+                }
+                override fun onCancelled(error: DatabaseError) {}
+            })
+
+            db.child("sensores").addValueEventListener(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    sensores = snapshot.getValue(DatosSensores::class.java) ?: DatosSensores()
+                }
+                override fun onCancelled(error: DatabaseError) {}
+            })
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     // ------------------- ACCIÓN DE VACIADO -------------------
@@ -98,7 +107,7 @@ class MainActivity : ComponentActivity() {
     }
 
     // ------------------- INTERFAZ PRINCIPAL -------------------
-    @OptIn(ExperimentalMaterial3Api::class) // ✅ SOLO MARCAMOS COMO EXPERIMENTAL, NO DA ERROR
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun PantallaPrincipal() {
         Scaffold(
