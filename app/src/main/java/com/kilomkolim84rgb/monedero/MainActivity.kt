@@ -3,10 +3,7 @@ package com.kilomkolim84rgb.monedero
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -33,7 +30,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 const val CLAVE_VACIAR = "1234"
-const val ORIGEN_MONEDERO = "Ciber Cesarín - Monedero"
+const val ORIGEN_MONEDERO = "ESP32 - Monedero"
 
 data class Registro(
     val id: String = "",
@@ -50,22 +47,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private lateinit var refHistorial: DatabaseReference
     private val CHANNEL_ID = "monedero_channel"
     private var ttsListo = false
+    private var ultimoTotal = 0 // ✅ PARA SABER CUÁNTO CAMBIÓ
 
     private var totalActual by mutableStateOf(0)
     private var listaHistorial by mutableStateOf(listOf<Registro>())
 
-    private val monedaReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            val monto = intent?.getIntExtra("MONTO", 0) ?: 0
-            if (monto > 0) {
-                agregarDinero(monto)
-            }
-        }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // ✅ INICIA Y FUERZA LA CARGA DE LA VOZ
         tts = TextToSpeech(this, this)
         createNotificationChannel()
         pedirPermisos()
@@ -74,14 +62,21 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         refTotal = db.getReference("total_general")
         refHistorial = db.getReference("historial")
 
+        // ✅ AHÍ ESTÁ LA MAGIA: EN CUANTO CAMBIE EL TOTAL EN FIREBASE...
         refTotal.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                totalActual = snapshot.getValue(Int::class.java) ?: 0
+                val nuevoTotal = snapshot.getValue(Int::class.java) ?: 0
+                if(nuevoTotal > ultimoTotal){
+                    // ✅ CALCULA CUÁNTO ENTRÓ, LO GUARDA, LO HABLA Y LO AVISA
+                    val cuantoEntro = nuevoTotal - ultimoTotal
+                    agregarDesdeFirebase(cuantoEntro)
+                }
+                ultimoTotal = nuevoTotal
+                totalActual = nuevoTotal
             }
             override fun onCancelled(error: DatabaseError) {}
         })
 
-        // ✅ ESCUCHA EL HISTORIAL SIN FALLAS
         refHistorial.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val temp = mutableListOf<Registro>()
@@ -93,8 +88,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             override fun onCancelled(error: DatabaseError) {}
         })
 
-        registerReceiver(monedaReceiver, IntentFilter("COM.MONEDERO.ADD_MONEDA"), RECEIVER_NOT_EXPORTED)
-
         setContent {
             MaterialTheme {
                 PantallaMonedero()
@@ -102,20 +95,17 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun agregarDinero(monto: Int) {
-        totalActual += monto
-        refTotal.setValue(totalActual)
+    private fun agregarDesdeFirebase(monto: Int) {
         val nuevo = Registro(monto = monto)
-        // ✅ ASEGURA QUE SE GUARDE ANTES DE HABLAR
-        refHistorial.push().setValue(nuevo).addOnCompleteListener {
-            hablar(monto)
-            aviso(monto)
-        }
+        refHistorial.push().setValue(nuevo)
+        hablar(monto)
+        aviso(monto)
     }
 
     private fun vaciarConClave(claveIngresada: String): Boolean {
         return if(claveIngresada == CLAVE_VACIAR){
             totalActual = 0
+            ultimoTotal = 0
             refTotal.setValue(0)
             refHistorial.removeValue()
             Toast.makeText(this, "✅ Monedero vaciado", Toast.LENGTH_SHORT).show()
@@ -148,15 +138,14 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             50 -> "Cincuenta soles"
             else -> "$monto soles"
         }
-        // ✅ FUERZA LA REPRODUCCIÓN
-        tts.speak(texto, TextToSpeech.QUEUE_FLUSH, null, "hablar_$monto")
+        tts.speak(texto, TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
     private fun aviso(monto: Int){
         val noti = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("✅ INGRESO REGISTRADO")
-            .setContentText("Entraron $monto soles | Total: $totalActual soles")
+            .setContentTitle("✅ INGRESO")
+            .setContentText("Entraron $monto soles | Total: $totalActual")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
         if(ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED){
@@ -166,8 +155,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if(status == TextToSpeech.SUCCESS){
-            val resultado = tts.setLanguage(Locale("es", "PE"))
-            ttsListo = (resultado != TextToSpeech.LANG_MISSING_DATA && resultado != TextToSpeech.LANG_NOT_SUPPORTED)
+            val ok = tts.setLanguage(Locale("es", "PE"))
+            ttsListo = (ok != TextToSpeech.LANG_MISSING_DATA && ok != TextToSpeech.LANG_NOT_SUPPORTED)
         }
     }
 
@@ -187,7 +176,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     }
 
     override fun onDestroy() {
-        unregisterReceiver(monedaReceiver)
         tts.stop()
         tts.shutdown()
         super.onDestroy()
@@ -202,12 +190,12 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         if(pedirClave){
             AlertDialog(
                 onDismissRequest = { pedirClave = false },
-                title = { Text("INGRESE CLAVE DE SEGURIDAD") },
+                title = { Text("INGRESE CLAVE") },
                 text = {
                     TextField(
                         value = textoClave,
                         onValueChange = { textoClave = it },
-                        label = { Text("Escriba la clave") },
+                        label = { Text("Clave") },
                         visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
                     )
                 },
@@ -215,7 +203,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     Button(onClick = {
                         if(vaciarConClave(textoClave)) pedirClave = false
                         textoClave = ""
-                    }) { Text("CONFIRMAR") }
+                    }) { Text("ACEPTAR") }
                 },
                 dismissButton = { Button({ pedirClave = false }) { Text("CANCELAR") } }
             )
