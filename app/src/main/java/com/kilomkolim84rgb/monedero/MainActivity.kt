@@ -1,246 +1,309 @@
 package com.kilomkolim84rgb.monedero
 
-import android.Manifest
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
+import android.app.AlertDialog
+import android.content.Intent
 import android.os.Bundle
-import android.speech.tts.TextToSpeech
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
 import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
 
-const val CLAVE_VACIAR = "1234"
-const val ORIGEN_MONEDERO = "ESP32 - Monedero"
-
-data class Registro(
+// ------------------- DATOS DE FIREBASE -------------------
+data class RegistroIngreso(
     val id: String = "",
+    val origen: String = "",
     val monto: Int = 0,
-    val fecha: Long = System.currentTimeMillis(),
-    val origen: String = ORIGEN_MONEDERO
+    val fecha: String = "",
+    val hora: String = "",
+    val ticket: String = "",
+    val fotoUrl: String = ""
 )
 
-class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
+data class DatosSensores(
+    val temperatura: Float = 0f,
+    val humedad: Float = 0f,
+    val rayos: Int = 0,
+    val voltaje: Float = 0f
+)
 
-    private lateinit var tts: TextToSpeech
-    private lateinit var db: FirebaseDatabase
-    private lateinit var refTotal: DatabaseReference
-    private lateinit var refHistorial: DatabaseReference
-    private val CHANNEL_ID = "monedero_channel"
-    private var ttsListo = false
-    private var ultimoTotal = 0 // ✅ PARA SABER CUÁNTO CAMBIÓ
-
-    private var totalActual by mutableStateOf(0)
-    private var listaHistorial by mutableStateOf(listOf<Registro>())
+class MainActivity : ComponentActivity() {
+    private val db = FirebaseDatabase.getInstance().reference
+    private var totalGeneral by mutableStateOf(0)
+    private var listaIngresos by mutableStateOf(listOf<RegistroIngreso>())
+    private var sensores by mutableStateOf(DatosSensores())
+    private var dialogoAbierto by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        tts = TextToSpeech(this, this)
-        createNotificationChannel()
-        pedirPermisos()
-
-        db = FirebaseDatabase.getInstance("https://ciber-cesarin-default-rtdb.firebaseio.com/")
-        refTotal = db.getReference("total_general")
-        refHistorial = db.getReference("historial")
-
-        // ✅ AHÍ ESTÁ LA MAGIA: EN CUANTO CAMBIE EL TOTAL EN FIREBASE...
-        refTotal.addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val nuevoTotal = snapshot.getValue(Int::class.java) ?: 0
-                if(nuevoTotal > ultimoTotal){
-                    // ✅ CALCULA CUÁNTO ENTRÓ, LO GUARDA, LO HABLA Y LO AVISA
-                    val cuantoEntro = nuevoTotal - ultimoTotal
-                    agregarDesdeFirebase(cuantoEntro)
-                }
-                ultimoTotal = nuevoTotal
-                totalActual = nuevoTotal
-            }
-            override fun onCancelled(error: DatabaseError) {}
-        })
-
-        refHistorial.addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val temp = mutableListOf<Registro>()
-                for (dato in snapshot.children) {
-                    dato.getValue(Registro::class.java)?.let { temp.add(0, it) }
-                }
-                listaHistorial = temp
-            }
-            override fun onCancelled(error: DatabaseError) {}
-        })
-
+        escucharDatos()
         setContent {
-            MaterialTheme {
-                PantallaMonedero()
+            PantallaPrincipal()
+        }
+    }
+
+    // ------------------- ESCUCHA TODO LO DE FIREBASE -------------------
+    private fun escucharDatos() {
+        // Total acumulado
+        db.child("total_general").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                totalGeneral = snapshot.getValue(Int::class.java) ?: 0
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
+
+        // Historial de ingresos
+        db.child("historial").orderByChild("fecha").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val lista = mutableListOf<RegistroIngreso>()
+                for(hijo in snapshot.children.reversed()){
+                    val reg = hijo.getValue(RegistroIngreso::class.java)
+                    reg?.let { lista.add(it.copy(id = hijo.key ?: "")) }
+                }
+                listaIngresos = lista
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
+
+        // Datos de sensores
+        db.child("sensores").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                sensores = snapshot.getValue(DatosSensores::class.java) ?: DatosSensores()
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
+    }
+
+    // ------------------- VACIAR MONEDERO CON CLAVE -------------------
+    private fun vaciarMonedero() {
+        AlertDialog.Builder(this)
+            .setTitle("CONFIRMAR VACIADO")
+            .setMessage("Escribe la clave de seguridad para borrar todo:")
+            .setView(android.widget.EditText(this).apply { hint = "Clave" })
+            .setPositiveButton("ACEPTAR") { _, _ ->
+                val clave = (dialogoAbierto as AlertDialog).findViewById<android.widget.EditText>(android.R.id.message)?.text.toString()
+                if(clave == "1234"){ // ✅ CAMBIA TU CLAVE AQUÍ
+                    db.child("total_general").setValue(0)
+                    db.child("historial").removeValue()
+                    Toast.makeText(this@MainActivity, "MONEDERO VACIADO", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@MainActivity, "CLAVE INCORRECTA", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("CANCELAR", null)
+            .show()
+    }
+
+    // ------------------- DISEÑO DE LA PANTALLA -------------------
+    @Composable
+    fun PantallaPrincipal(){
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("MONEDERO SMART", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = { finish() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás")
+                        }
+                    }
+                )
+            }
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+
+                // 🔹 TOTAL Y BOTÓN VACIAR
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "S/ $totalGeneral.00",
+                            fontSize = 48.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text("TOTAL ACUMULADO", fontSize = 16.sp, color = Color.Gray)
+                    }
+                    IconButton(
+                        onClick = { dialogoAbierto = true },
+                        modifier = Modifier
+                            .size(64.dp)
+                            .background(Color(0xFFD32F2F), shape = RoundedCornerShape(12.dp))
+                    ) {
+                        Icon(Icons.Filled.Delete, "Vaciar", tint = Color.White, modifier = Modifier.size(32.dp))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // 🔹 BARRA AZUL CON LOS 4 DATOS
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1565C0))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 20.dp, horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        DatoBarra("🌡️", "TEMP", "${sensores.temperatura}°C")
+                        Divider(modifier = Modifier.height(40.dp), color = Color.White.copy(alpha = 0.3f))
+                        DatoBarra("💧", "HUM", "${sensores.humedad}%")
+                        Divider(modifier = Modifier.height(40.dp), color = Color.White.copy(alpha = 0.3f))
+                        DatoBarra("⚡", "RAYOS", "${sensores.rayos}km")
+                        Divider(modifier = Modifier.height(40.dp), color = Color.White.copy(alpha = 0.3f))
+                        DatoBarra("🔌", "VOLT", "${sensores.voltaje}V")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // 🔹 TÍTULO HISTORIAL
+                Text(
+                    "HISTORIAL DE INGRESOS",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Start
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 🔹 LISTA DE REGISTROS
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)){
+                    items(listaIngresos){ reg ->
+                        TarjetaRegistro(reg)
+                    }
+                }
+            }
+
+            // 🔹 DIÁLOGO DE CONFIRMACIÓN
+            if(dialogoAbierto){
+                AlertDialog(
+                    onDismissRequest = { dialogoAbierto = false },
+                    title = { Text("VACIAR MONEDERO") },
+                    text = {
+                        Column {
+                            Text("Escribe la clave de seguridad:")
+                            Spacer(modifier = Modifier.height(8.dp))
+                            var clave by remember { mutableStateOf("") }
+                            TextField(
+                                value = clave,
+                                onValueChange = { clave = it },
+                                label = { Text("CLAVE") },
+                                singleLine = true
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(onClick = {
+                            val clave = "" // Aquí se toma el valor del campo
+                            if(clave == "1234"){ // TU CLAVE
+                                db.child("total_general").setValue(0)
+                                db.child("historial").removeValue()
+                                Toast.makeText(this@MainActivity, "VACIADO CORRECTO", Toast.LENGTH_SHORT).show()
+                                dialogoAbierto = false
+                            } else {
+                                Toast.makeText(this@MainActivity, "CLAVE ERRADA", Toast.LENGTH_SHORT).show()
+                            }
+                        }) { Text("ACEPTAR") }
+                    },
+                    dismissButton = {
+                        Button(onClick = { dialogoAbierto = false }, colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)) {
+                            Text("CANCELAR")
+                        }
+                    }
+                )
             }
         }
     }
 
-    private fun agregarDesdeFirebase(monto: Int) {
-        val nuevo = Registro(monto = monto)
-        refHistorial.push().setValue(nuevo)
-        hablar(monto)
-        aviso(monto)
-    }
-
-    private fun vaciarConClave(claveIngresada: String): Boolean {
-        return if(claveIngresada == CLAVE_VACIAR){
-            totalActual = 0
-            ultimoTotal = 0
-            refTotal.setValue(0)
-            refHistorial.removeValue()
-            Toast.makeText(this, "✅ Monedero vaciado", Toast.LENGTH_SHORT).show()
-            true
-        } else {
-            Toast.makeText(this, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
-            false
-        }
-    }
-
-    private fun hablar(monto: Int) {
-        if (!ttsListo) return
-        val texto = when(monto){
-            1 -> "Un sol"
-            2 -> "Dos soles"
-            3 -> "Tres soles"
-            4 -> "Cuatro soles"
-            5 -> "Cinco soles"
-            6 -> "Seis soles"
-            7 -> "Siete soles"
-            8 -> "Ocho soles"
-            9 -> "Nueve soles"
-            10 -> "Diez soles"
-            11 -> "Once soles"
-            12 -> "Doce soles"
-            13 -> "Trece soles"
-            14 -> "Catorce soles"
-            15 -> "Quince soles"
-            20 -> "Veinte soles"
-            50 -> "Cincuenta soles"
-            else -> "$monto soles"
-        }
-        tts.speak(texto, TextToSpeech.QUEUE_FLUSH, null, null)
-    }
-
-    private fun aviso(monto: Int){
-        val noti = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("✅ INGRESO")
-            .setContentText("Entraron $monto soles | Total: $totalActual")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-        if(ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED){
-            NotificationManagerCompat.from(this).notify(System.currentTimeMillis().toInt(), noti.build())
-        }
-    }
-
-    override fun onInit(status: Int) {
-        if(status == TextToSpeech.SUCCESS){
-            val ok = tts.setLanguage(Locale("es", "PE"))
-            ttsListo = (ok != TextToSpeech.LANG_MISSING_DATA && ok != TextToSpeech.LANG_NOT_SUPPORTED)
-        }
-    }
-
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            getSystemService(NotificationManager::class.java).createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "Monedero", NotificationManager.IMPORTANCE_HIGH)
-            )
-        }
-    }
-
-    private fun pedirPermisos(){
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED){
-            registerForActivityResult(ActivityResultContracts.RequestPermission()){}.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
-
-    override fun onDestroy() {
-        tts.stop()
-        tts.shutdown()
-        super.onDestroy()
-    }
-
+    // 🔹 COMPONENTE PARA CADA DATO EN LA BARRA AZUL
     @Composable
-    fun PantallaMonedero(){
-        val formato = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-        var pedirClave by remember { mutableStateOf(false) }
-        var textoClave by remember { mutableStateOf("") }
-
-        if(pedirClave){
-            AlertDialog(
-                onDismissRequest = { pedirClave = false },
-                title = { Text("INGRESE CLAVE") },
-                text = {
-                    TextField(
-                        value = textoClave,
-                        onValueChange = { textoClave = it },
-                        label = { Text("Clave") },
-                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
-                    )
-                },
-                confirmButton = {
-                    Button(onClick = {
-                        if(vaciarConClave(textoClave)) pedirClave = false
-                        textoClave = ""
-                    }) { Text("ACEPTAR") }
-                },
-                dismissButton = { Button({ pedirClave = false }) { Text("CANCELAR") } }
-            )
+    fun DatoBarra(icono: String, etiqueta: String, valor: String){
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(icono, fontSize = 24.sp, color = Color.White)
+            Text(etiqueta, fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Medium)
+            Text(valor, fontSize = 16.sp, color = Color.White, fontWeight = FontWeight.Bold)
         }
+    }
 
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+    // 🔹 TARJETA DE CADA INGRESO
+    @Composable
+    fun TarjetaRegistro(reg: RegistroIngreso){
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Text("S/ $totalActual", fontSize = 52.sp, fontWeight = FontWeight.Bold)
-            Text("Total acumulado", fontSize = 16.sp)
-            Spacer(Modifier.height(32.dp))
-
-            Button(
-                onClick = { pedirClave = true },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                modifier = Modifier.fillMaxWidth().height(56.dp)
-            ) { Text("VACIAR MONEDERO", fontSize = 18.sp) }
-
-            Spacer(Modifier.height(16.dp))
-            Divider()
-            Text("HISTORIAL DE INGRESOS", fontWeight = FontWeight.Bold, modifier = Modifier.padding(8.dp))
-
-            LazyColumn(Modifier.weight(1f)) {
-                items(listaHistorial) { reg ->
-                    Row(
-                        Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text("S/ ${reg.monto}", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                            Text("Origen: ${reg.origen}", fontSize = 12.sp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // ESPACIO PARA FOTO
+                Card(
+                    modifier = Modifier.size(60.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.LightGray)
+                ) {
+                    if(reg.fotoUrl.isNotEmpty()){
+                        // Aquí cuando tengas la cámara cargas la imagen
+                    } else {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("[FOTO]", fontSize = 12.sp, color = Color.DarkGray)
                         }
-                        Text(formato.format(Date(reg.fecha)), fontSize = 12.sp)
                     }
-                    Divider()
                 }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // DATOS DEL REGISTRO
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(reg.origen, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text("MONTO: S/ ${reg.monto}", fontSize = 14.sp)
+                    Text("${reg.fecha}  ${reg.hora}", fontSize = 13.sp, color = Color.Gray)
+                }
+
+                // NÚMERO DE TICKET
+                Text(
+                    "#${reg.ticket}",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFB71C1C)
+                )
             }
         }
     }
