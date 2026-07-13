@@ -8,6 +8,7 @@
         android:allowBackup="true"
         android:label="MonederoSmart"
         android:supportsRtl="true">
+        android:name=".AppFirebase"
         <activity
             android:name=".MainActivity"
             android:exported="true">
