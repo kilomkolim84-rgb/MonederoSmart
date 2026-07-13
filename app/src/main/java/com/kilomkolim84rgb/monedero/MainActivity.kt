@@ -173,7 +173,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         super.onDestroy()
     }
 
-    // ------------------- PANTALLA NUEVA SIN BOTONES MANUALES -------------------
+    // ------------------- PANTALLA CORREGIDA SIN ERRORES -------------------
     @Composable
     fun PantallaMonedero(){
         val formato = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
@@ -198,11 +198,14 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         textoClave = ""
                     }) { Text("CONFIRMAR") }
                 },
-                dismissButton = { Button({pedirClave=false}){Text("CANCELAR")} }
+                dismissButton = { Button({ pedirClave = false }) { Text("CANCELAR") } }
             )
         }
 
-        Column(Modifier.fillMaxSize().padding(16.dp), Alignment.CenterHorizontally) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally // ✅ CORREGIDO AQUÍ
+        ) {
             Text("S/ $totalActual", fontSize = 52.sp, fontWeight = FontWeight.Bold)
             Text("Total acumulado", fontSize = 16.sp)
             Spacer(Modifier.height(32.dp))
@@ -218,8 +221,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             Text("HISTORIAL DE INGRESOS", fontWeight = FontWeight.Bold, modifier = Modifier.padding(8.dp))
 
             LazyColumn(Modifier.weight(1f)) {
-                items(listaHistorial){ reg ->
-                    Row(Modifier.fillMaxWidth().padding(vertical=8.dp), Arrangement.SpaceBetween) {
+                items(listaHistorial) { reg ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
                         Column {
                             Text("S/ ${reg.monto}", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                             Text("Origen: ${reg.origen}", fontSize = 12.sp)
