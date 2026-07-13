@@ -1,6 +1,6 @@
 package com.kilomkolim84rgb.monedero
 
-import android.os.Bundle // ✅ ESTE FALTABA, LO AGREGUÉ
+import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -86,7 +86,7 @@ class MainActivity : ComponentActivity() {
 
     // ------------------- ACCIÓN DE VACIADO -------------------
     private fun confirmarVaciado() {
-        if(claveIngresada == "1234") { // ✅ PON TU CLAVE AQUÍ
+        if(claveIngresada == "1234") { // TU CLAVE AQUÍ
             db.child("total_general").setValue(0)
             db.child("historial").removeValue()
             Toast.makeText(this, "✅ MONEDERO VACIADO", Toast.LENGTH_SHORT).show()
@@ -98,6 +98,7 @@ class MainActivity : ComponentActivity() {
     }
 
     // ------------------- INTERFAZ PRINCIPAL -------------------
+    @OptIn(ExperimentalMaterial3Api::class) // ✅ SOLO MARCAMOS COMO EXPERIMENTAL, NO DA ERROR
     @Composable
     fun PantallaPrincipal() {
         Scaffold(
