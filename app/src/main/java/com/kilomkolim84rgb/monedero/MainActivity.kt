@@ -21,6 +21,7 @@ import java.util.*
 
 data class Movimiento(
     val fechaHora: String = "",
+    val detalle: String = "",
     val montoIngresado: Int = 0,
     val totalAcumulado: Int = 0
 )
@@ -41,7 +42,6 @@ class MainActivity : ComponentActivity() {
     private var temperatura by mutableStateOf("-- °C")
     private var voltaje by mutableStateOf("-- V")
     private var energia by mutableStateOf("-- A")
-    // ✅ ARREGLAMOS: INICIA EN 0, Y SE ACTUALIZA SIEMPRE
     private var totalAnterior = 0
 
     private fun escucharDatos() {
@@ -49,15 +49,20 @@ class MainActivity : ComponentActivity() {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val nuevoTotal = snapshot.getValue(Int::class.java) ?: 0
 
-                // ✅ AHORA DETECTA SI SUBE O SI VUELVE A EMPEZAR
+                // DETECTA NUEVO INGRESO
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
-                    val nuevoMov = Movimiento(fecha, cuantoEntro, nuevoTotal)
+                    val nuevoMov = Movimiento(
+                        fechaHora = fecha,
+                        detalle = "Ingreso",
+                        montoIngresado = cuantoEntro,
+                        totalAcumulado = nuevoTotal
+                    )
                     historial = listOf(nuevoMov) + historial
                     db.child("historial").push().setValue(nuevoMov)
                 }
-                // ✅ SI SE VACÍA O CAMBIA, ACTUALIZAMOS EL CONTROL
+
                 totalAnterior = nuevoTotal
                 totalGeneral = nuevoTotal
             }
@@ -148,8 +153,12 @@ class MainActivity : ComponentActivity() {
                         Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                             Column(modifier = Modifier.padding(10.dp)) {
                                 Text("📅 ${mov.fechaHora}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("💵 Ingresó: ${mov.montoIngresado} soles", fontSize = 14.sp)
-                                Text("🧾 Total: ${mov.totalAcumulado} soles", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                if(mov.detalle == "Monedero vaciado"){
+                                    Text("⚠️ ${mov.detalle}", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                } else {
+                                    Text("💵 ${mov.detalle}: ${mov.montoIngresado} soles", fontSize = 14.sp)
+                                    Text("🧾 Total: ${mov.totalAcumulado} soles", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                }
                             }
                         }
                     }
@@ -169,11 +178,22 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun vaciar() {
+        val fecha = formatoFecha.format(Date())
+        // ✅ AGREGAMOS EL REGISTRO DE VACIADO AL HISTORIAL, NO LO BORRAMOS
+        val registroVaciado = Movimiento(
+            fechaHora = fecha,
+            detalle = "Monedero vaciado",
+            montoIngresado = 0,
+            totalAcumulado = 0
+        )
+        historial = listOf(registroVaciado) + historial
+        db.child("historial").push().setValue(registroVaciado)
+
+        // ✅ PONEMOS EL TOTAL EN CERO Y REINICIAMOS EL CONTROL
         db.child("total_general").setValue(0)
         db.child("ultimo_movimiento").setValue("Monedero vaciado")
-        db.child("historial").removeValue() // ✅ BORRA TAMBIÉN EL HISTORIAL EN FIREBASE
-        historial = emptyList()
-        totalAnterior = 0 // ✅ REINICIA EL CONTROL PARA EMPEZAR DE CERO
+        totalAnterior = 0
+
         Toast.makeText(this, "Monedero vaciado ✅", Toast.LENGTH_SHORT).show()
     }
 }
