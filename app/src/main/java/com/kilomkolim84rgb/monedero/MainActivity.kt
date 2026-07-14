@@ -34,6 +34,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent { PantallaPrincipal() }
         escucharDatos()
+        cargarHistorialGuardado() // ✅ CARGA LO QUE YA HAY EN FIREBASE AL INICIAR
     }
 
     private var totalGeneral by mutableStateOf(0)
@@ -44,21 +45,36 @@ class MainActivity : ComponentActivity() {
     private var energia by mutableStateOf("-- A")
     private var totalAnterior = 0
 
+    // ✅ CARGA EL HISTORIAL GUARDADO EN FIREBASE
+    private fun cargarHistorialGuardado() {
+        db.child("historial").addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val lista = mutableListOf<Movimiento>()
+                for(item in snapshot.children){
+                    lista.add(
+                        Movimiento(
+                            fechaHora = item.child("fechaHora").getValue(String::class.java) ?: "",
+                            detalle = item.child("detalle").getValue(String::class.java) ?: "",
+                            montoIngresado = item.child("montoIngresado").getValue(Int::class.java) ?: 0,
+                            totalAcumulado = item.child("totalAcumulado").getValue(Int::class.java) ?: 0
+                        )
+                    )
+                }
+                historial = lista.reversed()
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        })
+    }
+
     private fun escucharDatos() {
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val nuevoTotal = snapshot.getValue(Int::class.java) ?: 0
 
-                // DETECTA NUEVO INGRESO
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
-                    val nuevoMov = Movimiento(
-                        fechaHora = fecha,
-                        detalle = "Ingreso",
-                        montoIngresado = cuantoEntro,
-                        totalAcumulado = nuevoTotal
-                    )
+                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal)
                     historial = listOf(nuevoMov) + historial
                     db.child("historial").push().setValue(nuevoMov)
                 }
@@ -154,7 +170,7 @@ class MainActivity : ComponentActivity() {
                             Column(modifier = Modifier.padding(10.dp)) {
                                 Text("📅 ${mov.fechaHora}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 if(mov.detalle == "Monedero vaciado"){
-                                    Text("⚠️ ${mov.detalle}", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Text("⚠️ ${mov.detalle}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
                                 } else {
                                     Text("💵 ${mov.detalle}: ${mov.montoIngresado} soles", fontSize = 14.sp)
                                     Text("🧾 Total: ${mov.totalAcumulado} soles", fontSize = 14.sp, fontWeight = FontWeight.Medium)
@@ -179,20 +195,19 @@ class MainActivity : ComponentActivity() {
 
     private fun vaciar() {
         val fecha = formatoFecha.format(Date())
-        // ✅ AGREGAMOS EL REGISTRO DE VACIADO AL HISTORIAL, NO LO BORRAMOS
         val registroVaciado = Movimiento(
             fechaHora = fecha,
             detalle = "Monedero vaciado",
             montoIngresado = 0,
             totalAcumulado = 0
         )
+        // ✅ AGREGA EL REGISTRO ARRIBA DE TODO Y LO GUARDA
         historial = listOf(registroVaciado) + historial
         db.child("historial").push().setValue(registroVaciado)
 
-        // ✅ PONEMOS EL TOTAL EN CERO Y REINICIAMOS EL CONTROL
         db.child("total_general").setValue(0)
         db.child("ultimo_movimiento").setValue("Monedero vaciado")
-        totalAnterior = 0
+        totalAnterior = 0 // ✅ REINICIA PARA EMPEZAR DE CERO
 
         Toast.makeText(this, "Monedero vaciado ✅", Toast.LENGTH_SHORT).show()
     }
