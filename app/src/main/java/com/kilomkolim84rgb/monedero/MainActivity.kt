@@ -24,7 +24,10 @@ data class Movimiento(
     val fechaHora: String = "",
     val detalle: String = "",
     val montoIngresado: Int = 0,
-    val totalAcumulado: Int = 0
+    val totalAcumulado: Int = 0,
+    val mac: String = "--",
+    val ip: String = "--",
+    val tieneFoto: Boolean = false
 )
 
 class MainActivity : ComponentActivity() {
@@ -67,7 +70,9 @@ class MainActivity : ComponentActivity() {
                             fechaHora = item.child("fechaHora").getValue(String::class.java) ?: "",
                             detalle = item.child("detalle").getValue(String::class.java) ?: "",
                             montoIngresado = item.child("montoIngresado").getValue(Int::class.java) ?: 0,
-                            totalAcumulado = item.child("totalAcumulado").getValue(Int::class.java) ?: 0
+                            totalAcumulado = item.child("totalAcumulado").getValue(Int::class.java) ?: 0,
+                            mac = item.child("mac").getValue(String::class.java) ?: "--",
+                            ip = item.child("ip").getValue(String::class.java) ?: "--"
                         )
                     )
                 }
@@ -88,7 +93,6 @@ class MainActivity : ComponentActivity() {
                     val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal)
                     historial = listOf(nuevoMov) + historial
                     db.child("historial").push().setValue(nuevoMov)
-                    // ✅ SE ACTUALIZA EL TEXTO "ÚLTIMO INGRESO"
                     db.child("ultimo_movimiento").setValue("Ingreso: $cuantoEntro soles")
                     hablar("Ingreso $cuantoEntro soles. Total $nuevoTotal soles")
                 }
@@ -181,35 +185,57 @@ class MainActivity : ComponentActivity() {
                 LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     items(historial) { mov ->
                         Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("📅 ${mov.fechaHora}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    if(mov.detalle == "Monedero vaciado"){
-                                        Text("⚠️ ${mov.detalle}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
-                                    } else {
-                                        Text("💵 ${mov.detalle}: ${mov.montoIngresado} soles", fontSize = 14.sp)
-                                        Text("🧾 Total: ${mov.totalAcumulado} soles", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                // FILA PRINCIPAL: DATOS Y QR
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("📅 ${mov.fechaHora}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        if(mov.detalle == "Monedero vaciado"){
+                                            Text("⚠️ ${mov.detalle}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                                        } else {
+                                            Text("💵 ${mov.detalle}: ${mov.montoIngresado} soles", fontSize = 14.sp)
+                                            Text("🧾 Total: ${mov.totalAcumulado} soles", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                        }
+                                    }
+                                    Card(
+                                        modifier = Modifier.size(60.dp, 60.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceVariant)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(
+                                                "Código\nQR",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                lineHeight = 12.sp,
+                                                modifier = Modifier.padding(4.dp)
+                                            )
+                                        }
                                     }
                                 }
-                                Card(
-                                    modifier = Modifier.size(60.dp, 60.dp),
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceVariant)
+                                // ✅ FILA NUEVA: FOTO Y DATOS DE RED
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(
-                                            "Código\nQR",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            lineHeight = 12.sp,
-                                            modifier = Modifier.padding(4.dp)
-                                        )
+                                    Card(
+                                        modifier = Modifier.size(50.dp, 50.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceVariant)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text("📷", fontSize = 20.sp)
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text("📶 MAC: ${mov.mac}", fontSize = 11.sp)
+                                        Text("🌐 IP: ${mov.ip}", fontSize = 11.sp)
                                     }
                                 }
                             }
@@ -223,7 +249,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun BotonDato(etiqueta: String, valor: String) {
         Card(modifier = Modifier.size(90.dp, 55.dp), shape = RoundedCornerShape(18.dp)) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Alignment.Center) {
                 Text(etiqueta, fontSize = 10.sp, fontWeight = FontWeight.Medium)
                 Text(valor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
