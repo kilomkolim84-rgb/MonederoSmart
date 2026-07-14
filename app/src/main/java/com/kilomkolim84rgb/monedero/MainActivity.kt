@@ -19,7 +19,6 @@ import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
 
-// ESTRUCTURA PARA CADA MOVIMIENTO
 data class Movimiento(
     val fechaHora: String = "",
     val montoIngresado: Int = 0,
@@ -42,23 +41,24 @@ class MainActivity : ComponentActivity() {
     private var temperatura by mutableStateOf("-- °C")
     private var voltaje by mutableStateOf("-- V")
     private var energia by mutableStateOf("-- A")
+    // ✅ ARREGLAMOS: INICIA EN 0, Y SE ACTUALIZA SIEMPRE
     private var totalAnterior = 0
 
     private fun escucharDatos() {
-        // TOTAL GENERAL
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val nuevoTotal = snapshot.getValue(Int::class.java) ?: 0
-                // SI AUMENTA, LO GUARDAMOS EN EL HISTORIAL
-                if(nuevoTotal > totalAnterior && nuevoTotal > 0){
+
+                // ✅ AHORA DETECTA SI SUBE O SI VUELVE A EMPEZAR
+                if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
                     val nuevoMov = Movimiento(fecha, cuantoEntro, nuevoTotal)
-                    historial = listOf(nuevoMov) + historial // LO NUEVO ARRIBA
-                    // OPCIONAL: GUARDAR TAMBIÉN EN FIREBASE
+                    historial = listOf(nuevoMov) + historial
                     db.child("historial").push().setValue(nuevoMov)
                 }
-                totalAnterior = totalGeneral
+                // ✅ SI SE VACÍA O CAMBIA, ACTUALIZAMOS EL CONTROL
+                totalAnterior = nuevoTotal
                 totalGeneral = nuevoTotal
             }
             override fun onCancelled(e: DatabaseError) {
@@ -66,7 +66,6 @@ class MainActivity : ComponentActivity() {
             }
         })
 
-        // ÚLTIMO MENSAJE
         db.child("ultimo_movimiento").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(s: DataSnapshot) {
                 ultimoMovimiento = s.getValue(String::class.java) ?: "-"
@@ -144,7 +143,6 @@ class MainActivity : ComponentActivity() {
                 Text("Historial de movimientos", fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // LISTA DEL HISTORIAL
                 LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     items(historial) { mov ->
                         Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
@@ -173,7 +171,9 @@ class MainActivity : ComponentActivity() {
     private fun vaciar() {
         db.child("total_general").setValue(0)
         db.child("ultimo_movimiento").setValue("Monedero vaciado")
-        historial = emptyList() // BORRA EL HISTORIAL AL VACIAR
+        db.child("historial").removeValue() // ✅ BORRA TAMBIÉN EL HISTORIAL EN FIREBASE
+        historial = emptyList()
+        totalAnterior = 0 // ✅ REINICIA EL CONTROL PARA EMPEZAR DE CERO
         Toast.makeText(this, "Monedero vaciado ✅", Toast.LENGTH_SHORT).show()
     }
 }
