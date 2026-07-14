@@ -6,7 +6,7 @@ import android.speech.tts.TextToSpeech
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
     private var historial by mutableStateOf(listOf<Movimiento>())
     private var temperatura by mutableStateOf("-- °C")
     private var voltaje by mutableStateOf("-- V")
-    private var energia by mutableStateOf("-- A")
+    private var distanciaRayos by mutableStateOf("-- km") // ✅ NUEVO: DISTANCIA DE RAYOS
     private var totalAnterior = 0
 
     private fun cargarHistorialGuardado() {
@@ -114,6 +114,7 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(e: DatabaseError) {}
         })
 
+        // ✅ SENSOR DE TEMPERATURA
         db.child("sensores/temperatura").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(s: DataSnapshot) {
                 val v = s.getValue(Double::class.java)
@@ -122,6 +123,7 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(e: DatabaseError) {}
         })
 
+        // ✅ SENSOR DE VOLTAJE DE BATERÍA
         db.child("sensores/voltaje").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(s: DataSnapshot) {
                 val v = s.getValue(Double::class.java)
@@ -130,10 +132,12 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(e: DatabaseError) {}
         })
 
-        db.child("sensores/corriente").addValueEventListener(object : ValueEventListener {
+        // ✅ SENSOR DE RAYOS (DISTANCIA EN KM)
+        db.child("sensores/rayos_distancia").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(s: DataSnapshot) {
                 val v = s.getValue(Double::class.java)
-                energia = if(v!=null) String.format("%.2f A", v) else "-- A"
+                distanciaRayos = if(v!=null) String.format("%.0f km", v) else "-- km"
+                // ✅ Aquí después agregaremos el aviso por voz/WhatsApp cuando detecte cerca
             }
             override fun onCancelled(e: DatabaseError) {}
         })
@@ -143,7 +147,7 @@ class MainActivity : ComponentActivity() {
     fun PantallaPrincipal() {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            containerColor = Color.White // ✅ FONDO GENERAL BLANCO
+            containerColor = Color.White
         ) { padding ->
             Column(
                 modifier = Modifier
@@ -155,11 +159,11 @@ class MainActivity : ComponentActivity() {
             ) {
                 Text("MONEDERO SMART", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp), color = Color.Black)
 
-                // ✅ TARJETAS DE SENSORES: FONDO AMARILLO
+                // ✅ TRES TARJETAS: TEMP, VOLTAJE, RAYOS (TODAS FONDO AMARILLO)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    BotonDato("TEMP", temperatura, Color(0xFFFFEB3B)) // Amarillo
-                    BotonDato("VOLT", voltaje, Color(0xFFFFEB3B))
-                    BotonDato("ENERG", energia, Color(0xFFFFEB3B))
+                    BotonDato("TEMP", temperatura)
+                    BotonDato("VOLT", voltaje)
+                    BotonDato("RAYOS", distanciaRayos)
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -175,11 +179,11 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // ✅ TARJETA DEL TOTAL: FONDO VERDE FOSFORESCENTE / LIMÓN
+                // ✅ TARJETA DEL TOTAL: FONDO VERDE LIMÓN
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFCDFF33)) // Verde limón
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFCDFF33))
                 ) {
                     Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("TOTAL", fontSize = 14.sp, color = Color.Black)
@@ -193,7 +197,7 @@ class MainActivity : ComponentActivity() {
                 Text("Historial", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.Black)
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // ✅ SECCIÓN DEL HISTORIAL: FONDO CELESTE SUAVE
+                // ✅ SECCIÓN HISTORIAL: FONDO CELESTE SUAVE
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -204,16 +208,12 @@ class MainActivity : ComponentActivity() {
                     LazyColumn(modifier = Modifier.fillMaxWidth()) {
                         items(historial) { mov ->
                             Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 3.dp),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
                                 shape = RoundedCornerShape(8.dp),
                                 colors = CardDefaults.cardColors(containerColor = Color.White)
                             ) {
                                 Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(10.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(10.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -274,11 +274,11 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun BotonDato(etiqueta: String, valor: String, colorFondo: Color) {
+    fun BotonDato(etiqueta: String, valor: String) {
         Card(
             modifier = Modifier.size(75.dp, 45.dp),
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = colorFondo)
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEB3B)) // Fondo amarillo
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Text(etiqueta, fontSize = 9.sp, fontWeight = FontWeight.Medium, color = Color.Black)
