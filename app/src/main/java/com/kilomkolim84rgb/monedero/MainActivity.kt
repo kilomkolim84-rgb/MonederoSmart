@@ -13,8 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ktx.getValue
+import com.google.firebase.database.*
 
 class MainActivity : ComponentActivity() {
     private val db = FirebaseDatabase.getInstance().reference
@@ -33,32 +32,49 @@ class MainActivity : ComponentActivity() {
 
     private fun escucharDatosFirebase() {
         // TOTAL
-        db.child("total_soles").addValueEventListener { snapshot ->
-            totalSoles = snapshot.getValue(Int::class.java) ?: 0
-        }
+        db.child("total_soles").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                totalSoles = snapshot.getValue(Int::class.java) ?: 0
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Toast.makeText(this@MainActivity, "Sin conexión", Toast.LENGTH_SHORT).show()
+            }
+        })
 
         // ÚLTIMO MOVIMIENTO
-        db.child("ultimo_movimiento").addValueEventListener { snapshot ->
-            ultimoIngreso = snapshot.getValue(String::class.java) ?: "-"
-        }
+        db.child("ultimo_movimiento").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                ultimoIngreso = snapshot.getValue(String::class.java) ?: "-"
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
 
         // TEMPERATURA
-        db.child("sensores/temperatura").addValueEventListener { snapshot ->
-            val t = snapshot.getValue(Double::class.java)
-            temperatura = if(t!=null) String.format("%.1f °C", t) else "-- °C"
-        }
+        db.child("sensores/temperatura").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val t = snapshot.getValue(Double::class.java)
+                temperatura = if(t!=null) String.format("%.1f °C", t) else "-- °C"
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
 
         // VOLTAJE
-        db.child("sensores/voltaje").addValueEventListener { snapshot ->
-            val v = snapshot.getValue(Double::class.java)
-            voltaje = if(v!=null) String.format("%.1f V", v) else "-- V"
-        }
+        db.child("sensores/voltaje").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val v = snapshot.getValue(Double::class.java)
+                voltaje = if(v!=null) String.format("%.1f V", v) else "-- V"
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
 
         // ENERGÍA / CORRIENTE
-        db.child("sensores/corriente").addValueEventListener { snapshot ->
-            val a = snapshot.getValue(Double::class.java)
-            energia = if(a!=null) String.format("%.2f A", a) else "-- A"
-        }
+        db.child("sensores/corriente").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val a = snapshot.getValue(Double::class.java)
+                energia = if(a!=null) String.format("%.2f A", a) else "-- A"
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
     }
 
     @Composable
