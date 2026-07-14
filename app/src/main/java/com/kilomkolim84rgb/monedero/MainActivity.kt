@@ -26,8 +26,7 @@ data class Movimiento(
     val montoIngresado: Int = 0,
     val totalAcumulado: Int = 0,
     val mac: String = "--",
-    val ip: String = "--",
-    val tieneFoto: Boolean = false
+    val ip: String = "--"
 )
 
 class MainActivity : ComponentActivity() {
@@ -145,97 +144,73 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(16.dp),
+                    .padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Top
             ) {
-                Text("MONEDERO SMART", fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 16.dp))
+                Text("MONEDERO SMART", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp))
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    BotonDato("TEMPERATURA", temperatura)
-                    BotonDato("VOLTAJE", voltaje)
-                    BotonDato("ENERGÍA", energia)
+                    BotonDato("TEMP", temperatura)
+                    BotonDato("VOLT", voltaje)
+                    BotonDato("ENERG", energia)
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Button(
                     onClick = { vaciar() },
                     colors = ButtonDefaults.buttonColors(MaterialTheme.colorScheme.error),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.height(40.dp)
                 ) {
-                    Text("VACIAR MONEDERO", fontSize = 12.sp)
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                    Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("TOTAL ACUMULADO", fontSize = 16.sp)
-                        Text("$totalGeneral SOLES", fontSize = 48.sp, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Último ingreso: $ultimoMovimiento", fontSize = 15.sp)
-                    }
+                    Text("VACIAR", fontSize = 11.sp)
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Historial de movimientos", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                Spacer(modifier = Modifier.height(8.dp))
+
+                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                    Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("TOTAL", fontSize = 14.sp)
+                        Text("$totalGeneral SOLES", fontSize = 36.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Último: $ultimoMovimiento", fontSize = 12.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Historial", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Spacer(modifier = Modifier.height(6.dp))
 
                 LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     items(historial) { mov ->
-                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                            Column(modifier = Modifier.padding(10.dp)) {
-                                // FILA PRINCIPAL: DATOS Y QR
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.Top
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text("📅 ${mov.fechaHora}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        if(mov.detalle == "Monedero vaciado"){
-                                            Text("⚠️ ${mov.detalle}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
-                                        } else {
-                                            Text("💵 ${mov.detalle}: ${mov.montoIngresado} soles", fontSize = 14.sp)
-                                            Text("🧾 Total: ${mov.totalAcumulado} soles", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                        }
+                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), shape = RoundedCornerShape(8.dp)) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // DATOS PRINCIPALES
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("${mov.fechaHora}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if(mov.detalle == "Monedero vaciado"){
+                                        Text("⚠️ Vaciado", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                                    } else {
+                                        Text("+${mov.montoIngresado} | Total:${mov.totalAcumulado}", fontSize = 11.sp)
                                     }
-                                    Card(
-                                        modifier = Modifier.size(60.dp, 60.dp),
-                                        shape = RoundedCornerShape(8.dp),
-                                        colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceVariant)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Text(
-                                                "Código\nQR",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                lineHeight = 12.sp,
-                                                modifier = Modifier.padding(4.dp)
-                                            )
-                                        }
-                                    }
+                                    // ✅ DATOS PEQUEÑOS EN LA MISMA LÍNEA
+                                    Text("📷 | MAC:${mov.mac} | IP:${mov.ip}", fontSize = 9.sp)
                                 }
-                                // ✅ FILA NUEVA: FOTO Y DATOS DE RED
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
+                                // QR PEQUEÑO
+                                Card(
+                                    modifier = Modifier.size(40.dp, 40.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceVariant)
                                 ) {
-                                    Card(
-                                        modifier = Modifier.size(50.dp, 50.dp),
-                                        shape = RoundedCornerShape(8.dp),
-                                        colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceVariant)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Text("📷", fontSize = 20.sp)
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column {
-                                        Text("📶 MAC: ${mov.mac}", fontSize = 11.sp)
-                                        Text("🌐 IP: ${mov.ip}", fontSize = 11.sp)
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text("QR", fontSize = 9.sp, fontWeight = FontWeight.Medium)
                                     }
                                 }
                             }
@@ -248,10 +223,10 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun BotonDato(etiqueta: String, valor: String) {
-        Card(modifier = Modifier.size(90.dp, 55.dp), shape = RoundedCornerShape(18.dp)) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Alignment.Center) {
-                Text(etiqueta, fontSize = 10.sp, fontWeight = FontWeight.Medium)
-                Text(valor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Card(modifier = Modifier.size(75.dp, 45.dp), shape = RoundedCornerShape(12.dp)) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Text(etiqueta, fontSize = 9.sp, fontWeight = FontWeight.Medium)
+                Text(valor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -272,7 +247,7 @@ class MainActivity : ComponentActivity() {
         totalAnterior = 0
         hablar("Monedero vaciado")
 
-        Toast.makeText(this, "Monedero vaciado ✅", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Vaciado ✅", Toast.LENGTH_SHORT).show()
     }
 
     override fun onDestroy() {
