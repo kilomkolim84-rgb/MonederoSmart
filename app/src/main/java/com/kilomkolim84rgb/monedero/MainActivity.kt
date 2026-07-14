@@ -5,6 +5,8 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -14,62 +16,87 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.database.*
+import java.text.SimpleDateFormat
+import java.util.*
+
+// ESTRUCTURA PARA CADA MOVIMIENTO
+data class Movimiento(
+    val fechaHora: String = "",
+    val montoIngresado: Int = 0,
+    val totalAcumulado: Int = 0
+)
 
 class MainActivity : ComponentActivity() {
     private val db = FirebaseDatabase.getInstance().reference
+    private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent { PantallaPrincipal() }
-        escucharTotal()
+        escucharDatos()
     }
 
-    private var totalSoles by mutableStateOf(0)
-    private var ultimoIngreso by mutableStateOf("-")
+    private var totalGeneral by mutableStateOf(0)
+    private var ultimoMovimiento by mutableStateOf("-")
+    private var historial by mutableStateOf(listOf<Movimiento>())
     private var temperatura by mutableStateOf("-- °C")
     private var voltaje by mutableStateOf("-- V")
     private var energia by mutableStateOf("-- A")
+    private var totalAnterior = 0
 
-    private fun escucharTotal() {
+    private fun escucharDatos() {
+        // TOTAL GENERAL
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                totalSoles = snapshot.getValue(Int::class.java) ?: 0
+                val nuevoTotal = snapshot.getValue(Int::class.java) ?: 0
+                // SI AUMENTA, LO GUARDAMOS EN EL HISTORIAL
+                if(nuevoTotal > totalAnterior && nuevoTotal > 0){
+                    val cuantoEntro = nuevoTotal - totalAnterior
+                    val fecha = formatoFecha.format(Date())
+                    val nuevoMov = Movimiento(fecha, cuantoEntro, nuevoTotal)
+                    historial = listOf(nuevoMov) + historial // LO NUEVO ARRIBA
+                    // OPCIONAL: GUARDAR TAMBIÉN EN FIREBASE
+                    db.child("historial").push().setValue(nuevoMov)
+                }
+                totalAnterior = totalGeneral
+                totalGeneral = nuevoTotal
             }
-            override fun onCancelled(error: DatabaseError) {
+            override fun onCancelled(e: DatabaseError) {
                 Toast.makeText(this@MainActivity, "Sin conexión", Toast.LENGTH_SHORT).show()
             }
         })
 
+        // ÚLTIMO MENSAJE
         db.child("ultimo_movimiento").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                ultimoIngreso = snapshot.getValue(String::class.java) ?: "-"
+            override fun onDataChange(s: DataSnapshot) {
+                ultimoMovimiento = s.getValue(String::class.java) ?: "-"
             }
-            override fun onCancelled(error: DatabaseError) {}
+            override fun onCancelled(e: DatabaseError) {}
         })
 
         // SENSORES
         db.child("sensores/temperatura").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val t = snapshot.getValue(Double::class.java)
-                temperatura = if(t!=null) String.format("%.1f °C", t) else "-- °C"
+            override fun onDataChange(s: DataSnapshot) {
+                val v = s.getValue(Double::class.java)
+                temperatura = if(v!=null) String.format("%.1f °C", v) else "-- °C"
             }
-            override fun onCancelled(error: DatabaseError) {}
+            override fun onCancelled(e: DatabaseError) {}
         })
 
         db.child("sensores/voltaje").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val v = snapshot.getValue(Double::class.java)
+            override fun onDataChange(s: DataSnapshot) {
+                val v = s.getValue(Double::class.java)
                 voltaje = if(v!=null) String.format("%.1f V", v) else "-- V"
             }
-            override fun onCancelled(error: DatabaseError) {}
+            override fun onCancelled(e: DatabaseError) {}
         })
 
         db.child("sensores/corriente").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val a = snapshot.getValue(Double::class.java)
-                energia = if(a!=null) String.format("%.2f A", a) else "-- A"
+            override fun onDataChange(s: DataSnapshot) {
+                val v = s.getValue(Double::class.java)
+                energia = if(v!=null) String.format("%.2f A", v) else "-- A"
             }
-            override fun onCancelled(error: DatabaseError) {}
+            override fun onCancelled(e: DatabaseError) {}
         })
     }
 
@@ -107,14 +134,28 @@ class MainActivity : ComponentActivity() {
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                     Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("TOTAL ACUMULADO", fontSize = 16.sp)
-                        Text("$totalSoles SOLES", fontSize = 48.sp, fontWeight = FontWeight.Bold)
+                        Text("$totalGeneral SOLES", fontSize = 48.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("Último ingreso: $ultimoIngreso", fontSize = 15.sp)
+                        Text("Último ingreso: $ultimoMovimiento", fontSize = 15.sp)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("Historial de movimientos", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // LISTA DEL HISTORIAL
+                LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    items(historial) { mov ->
+                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text("📅 ${mov.fechaHora}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("💵 Ingresó: ${mov.montoIngresado} soles", fontSize = 14.sp)
+                                Text("🧾 Total: ${mov.totalAcumulado} soles", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -132,6 +173,7 @@ class MainActivity : ComponentActivity() {
     private fun vaciar() {
         db.child("total_general").setValue(0)
         db.child("ultimo_movimiento").setValue("Monedero vaciado")
+        historial = emptyList() // BORRA EL HISTORIAL AL VACIAR
         Toast.makeText(this, "Monedero vaciado ✅", Toast.LENGTH_SHORT).show()
     }
 }
