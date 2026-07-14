@@ -6,6 +6,7 @@ import android.speech.tts.TextToSpeech
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -21,7 +23,8 @@ import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
 
-const val CLAVE_VACIADO = "222777"
+// ✅ TU CLAVE DE SEGURIDAD
+const val CLAVE_VACIADO = "123456"
 
 data class Movimiento(
     val fechaHora: String = "",
@@ -138,22 +141,25 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun PantallaPrincipal() {
-        Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = Color.White // ✅ FONDO GENERAL BLANCO
+        ) { padding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
                     .padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                // ✅ AQUÍ ESTABA EL ÚNICO ERROR, YA QUEDÓ BIEN:
                 verticalArrangement = Arrangement.Top
             ) {
-                Text("MONEDERO SMART", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp))
+                Text("MONEDERO SMART", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp), color = Color.Black)
 
+                // ✅ TARJETAS DE SENSORES: FONDO AMARILLO
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    BotonDato("TEMP", temperatura)
-                    BotonDato("VOLT", voltaje)
-                    BotonDato("ENERG", energia)
+                    BotonDato("TEMP", temperatura, Color(0xFFFFEB3B)) // Amarillo
+                    BotonDato("VOLT", voltaje, Color(0xFFFFEB3B))
+                    BotonDato("ENERG", energia, Color(0xFFFFEB3B))
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -169,50 +175,78 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                // ✅ TARJETA DEL TOTAL: FONDO VERDE FOSFORESCENTE / LIMÓN
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFCDFF33)) // Verde limón
+                ) {
                     Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("TOTAL", fontSize = 14.sp)
-                        Text("$totalGeneral SOLES", fontSize = 36.sp, fontWeight = FontWeight.Bold)
+                        Text("TOTAL", fontSize = 14.sp, color = Color.Black)
+                        Text("$totalGeneral SOLES", fontSize = 36.sp, fontWeight = FontWeight.Bold, color = Color.Black)
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text("Último: $ultimoMovimiento", fontSize = 12.sp)
+                        Text("Último: $ultimoMovimiento", fontSize = 12.sp, color = Color.DarkGray)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
-                Text("Historial", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("Historial", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.Black)
                 Spacer(modifier = Modifier.height(6.dp))
 
-                LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                    items(historial) { mov ->
-                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), shape = RoundedCornerShape(8.dp)) {
-                            Row(
+                // ✅ SECCIÓN DEL HISTORIAL: FONDO CELESTE SUAVE
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .background(Color(0xFFE0F7FF), shape = RoundedCornerShape(12.dp))
+                        .padding(8.dp)
+                ) {
+                    LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                        items(historial) { mov ->
+                            Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                    .padding(vertical = 3.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White)
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(mov.fechaHora, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    if(mov.detalle == "Monedero vaciado"){
-                                        Text("⚠️ Vaciado", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
-                                    } else {
-                                        Text("+${mov.montoIngresado} | Total: ${mov.totalAcumulado}", fontSize = 12.sp)
-                                    }
-                                }
                                 Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Card(modifier = Modifier.size(45.dp, 45.dp), shape = RoundedCornerShape(6.dp), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceVariant)) {
-                                        Box(contentAlignment = Alignment.Center) { Text("📷", fontSize = 18.sp) }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(mov.fechaHora, fontSize = 11.sp, color = Color.Gray)
+                                        if(mov.detalle == "Monedero vaciado"){
+                                            Text("⚠️ Vaciado", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Red)
+                                        } else {
+                                            Text("+${mov.montoIngresado} | Total: ${mov.totalAcumulado}", fontSize = 12.sp, color = Color.Black)
+                                        }
                                     }
-                                    Column(modifier = Modifier.width(100.dp)) {
-                                        Text("MAC: ${mov.mac}", fontSize = 10.sp)
-                                        Text("IP: ${mov.ip}", fontSize = 10.sp)
-                                    }
-                                    Card(modifier = Modifier.size(45.dp, 45.dp), shape = RoundedCornerShape(6.dp), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceVariant)) {
-                                        Box(contentAlignment = Alignment.Center) { Text("QR", fontSize = 10.sp, fontWeight = FontWeight.Medium) }
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Card(
+                                            modifier = Modifier.size(45.dp, 45.dp),
+                                            shape = RoundedCornerShape(6.dp),
+                                            colors = CardDefaults.cardColors(Color(0xFFF5F5F5))
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) { Text("📷", fontSize = 18.sp) }
+                                        }
+                                        Column(modifier = Modifier.width(100.dp)) {
+                                            Text("MAC: ${mov.mac}", fontSize = 10.sp, color = Color.Gray)
+                                            Text("IP: ${mov.ip}", fontSize = 10.sp, color = Color.Gray)
+                                        }
+                                        Card(
+                                            modifier = Modifier.size(45.dp, 45.dp),
+                                            shape = RoundedCornerShape(6.dp),
+                                            colors = CardDefaults.cardColors(Color(0xFFF5F5F5))
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) { Text("QR", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color.Black) }
+                                        }
                                     }
                                 }
                             }
@@ -240,11 +274,15 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun BotonDato(etiqueta: String, valor: String) {
-        Card(modifier = Modifier.size(75.dp, 45.dp), shape = RoundedCornerShape(12.dp)) {
+    fun BotonDato(etiqueta: String, valor: String, colorFondo: Color) {
+        Card(
+            modifier = Modifier.size(75.dp, 45.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = colorFondo)
+        ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Text(etiqueta, fontSize = 9.sp, fontWeight = FontWeight.Medium)
-                Text(valor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(etiqueta, fontSize = 9.sp, fontWeight = FontWeight.Medium, color = Color.Black)
+                Text(valor, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black)
             }
         }
     }
