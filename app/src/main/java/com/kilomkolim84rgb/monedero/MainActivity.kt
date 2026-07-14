@@ -31,8 +31,8 @@ class MainActivity : ComponentActivity() {
     private var energia by mutableStateOf("-- A")
 
     private fun escucharDatosFirebase() {
-        // TOTAL
-        db.child("total_soles").addValueEventListener(object : ValueEventListener {
+        // ✅ AHORA LEE EL TOTAL CORRECTO: total_general
+        db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 totalSoles = snapshot.getValue(Int::class.java) ?: 0
             }
@@ -49,7 +49,7 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(error: DatabaseError) {}
         })
 
-        // TEMPERATURA
+        // SENSORES - CUANDO EL ESP32 MANDE DATOS SE ACTUALIZAN
         db.child("sensores/temperatura").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val t = snapshot.getValue(Double::class.java)
@@ -58,7 +58,6 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(error: DatabaseError) {}
         })
 
-        // VOLTAJE
         db.child("sensores/voltaje").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val v = snapshot.getValue(Double::class.java)
@@ -67,7 +66,6 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(error: DatabaseError) {}
         })
 
-        // ENERGÍA / CORRIENTE
         db.child("sensores/corriente").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val a = snapshot.getValue(Double::class.java)
@@ -134,7 +132,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun vaciarMonedero() {
-        db.child("total_soles").setValue(0)
+        db.child("total_general").setValue(0) // ✅ VACÍA EL TOTAL CORRECTO
         db.child("ultimo_movimiento").setValue("Monedero vaciado")
         Toast.makeText(this, "Monedero vaciado ✅", Toast.LENGTH_SHORT).show()
     }
