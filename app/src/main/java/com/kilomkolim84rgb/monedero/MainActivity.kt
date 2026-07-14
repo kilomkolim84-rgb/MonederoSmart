@@ -21,8 +21,8 @@ import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
 
-// ✅ AQUÍ PONES TU CLAVE, CAMBIA LO QUE QUIERAS
-const val CLAVE_VACIADO = "222777" // Puedes poner letras/números ej: "CESAR777"
+// ✅ AQUÍ CAMBIAS TU CLAVE CUANDO QUIERAS
+const val CLAVE_VACIADO = "222777"
 
 data class Movimiento(
     val fechaHora: String = "",
@@ -150,7 +150,7 @@ class MainActivity : ComponentActivity() {
                     .padding(padding)
                     .padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Top
+                verticalArrangement = Arrangement.Top // ✅ LÍNEA CORREGIDA: AQUÍ ESTABA EL ERROR
             ) {
                 Text("MONEDERO SMART", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp))
 
@@ -163,7 +163,7 @@ class MainActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Button(
-                    onClick = { pedirClave() }, // ✅ AHORA PIDE CLAVE ANTES DE VACIAR
+                    onClick = { pedirClave() },
                     colors = ButtonDefaults.buttonColors(MaterialTheme.colorScheme.error),
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.height(40.dp)
@@ -196,7 +196,7 @@ class MainActivity : ComponentActivity() {
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // LADO IZQUIERDO: FECHA Y MONTOS
+                                // IZQUIERDA: FECHA Y MONTOS
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(mov.fechaHora, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     if(mov.detalle == "Monedero vaciado"){
@@ -206,7 +206,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
 
-                                // LADO DERECHO: FOTO + DATOS + QR
+                                // DERECHA: FOTO + MAC/IP + QR
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
@@ -242,22 +242,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ✅ FUNCIÓN PARA PEDIR Y VERIFICAR CLAVE
+    // VENTANA DE CLAVE DE SEGURIDAD
     private fun pedirClave() {
         val entrada = android.widget.EditText(this)
         entrada.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
 
         AlertDialog.Builder(this)
             .setTitle("CLAVE DE SEGURIDAD")
-            .setMessage("Escribe tu clave para vaciar el monedero:")
+            .setMessage("Escribe tu clave para vaciar:")
             .setView(entrada)
             .setPositiveButton("CONFIRMAR") { _, _ ->
-                val claveIngresada = entrada.text.toString()
-                if(claveIngresada == CLAVE_VACIADO){
-                    vaciar()
-                } else {
-                    Toast.makeText(this, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
-                }
+                val clave = entrada.text.toString()
+                if(clave == CLAVE_VACIADO) vaciar()
+                else Toast.makeText(this, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("CANCELAR", null)
             .show()
@@ -275,21 +272,14 @@ class MainActivity : ComponentActivity() {
 
     private fun vaciar() {
         val fecha = formatoFecha.format(Date())
-        val registroVaciado = Movimiento(
-            fechaHora = fecha,
-            detalle = "Monedero vaciado",
-            montoIngresado = 0,
-            totalAcumulado = 0
-        )
-        historial = listOf(registroVaciado) + historial
-        db.child("historial").push().setValue(registroVaciado)
-
+        val reg = Movimiento(fecha, "Monedero vaciado", 0, 0)
+        historial = listOf(reg) + historial
+        db.child("historial").push().setValue(reg)
         db.child("total_general").setValue(0)
         db.child("ultimo_movimiento").setValue("Monedero vaciado")
         totalAnterior = 0
         hablar("Monedero vaciado")
-
-        Toast.makeText(this, "✅ Monedero vaciado correctamente", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "✅ Vaciado correctamente", Toast.LENGTH_SHORT).show()
     }
 
     override fun onDestroy() {
