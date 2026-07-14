@@ -1,5 +1,6 @@
 package com.kilomkolim84rgb.monedero
 
+import android.app.AlertDialog
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.widget.Toast
@@ -19,6 +20,9 @@ import androidx.compose.ui.unit.sp
 import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
+
+// ✅ AQUÍ PONES TU CLAVE, CAMBIA LO QUE QUIERAS
+const val CLAVE_VACIADO = "222777" // Puedes poner letras/números ej: "CESAR777"
 
 data class Movimiento(
     val fechaHora: String = "",
@@ -146,7 +150,7 @@ class MainActivity : ComponentActivity() {
                     .padding(padding)
                     .padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Top // ✅ AQUÍ ESTABA EL ERROR, YA ESTÁ CORREGIDO
+                verticalArrangement = Arrangement.Top
             ) {
                 Text("MONEDERO SMART", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp))
 
@@ -159,7 +163,7 @@ class MainActivity : ComponentActivity() {
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Button(
-                    onClick = { vaciar() },
+                    onClick = { pedirClave() }, // ✅ AHORA PIDE CLAVE ANTES DE VACIAR
                     colors = ButtonDefaults.buttonColors(MaterialTheme.colorScheme.error),
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.height(40.dp)
@@ -238,10 +242,31 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // ✅ FUNCIÓN PARA PEDIR Y VERIFICAR CLAVE
+    private fun pedirClave() {
+        val entrada = android.widget.EditText(this)
+        entrada.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+
+        AlertDialog.Builder(this)
+            .setTitle("CLAVE DE SEGURIDAD")
+            .setMessage("Escribe tu clave para vaciar el monedero:")
+            .setView(entrada)
+            .setPositiveButton("CONFIRMAR") { _, _ ->
+                val claveIngresada = entrada.text.toString()
+                if(claveIngresada == CLAVE_VACIADO){
+                    vaciar()
+                } else {
+                    Toast.makeText(this, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("CANCELAR", null)
+            .show()
+    }
+
     @Composable
     fun BotonDato(etiqueta: String, valor: String) {
         Card(modifier = Modifier.size(75.dp, 45.dp), shape = RoundedCornerShape(12.dp)) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Alignment.Center) {
                 Text(etiqueta, fontSize = 9.sp, fontWeight = FontWeight.Medium)
                 Text(valor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
@@ -264,7 +289,7 @@ class MainActivity : ComponentActivity() {
         totalAnterior = 0
         hablar("Monedero vaciado")
 
-        Toast.makeText(this, "Vaciado ✅", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "✅ Monedero vaciado correctamente", Toast.LENGTH_SHORT).show()
     }
 
     override fun onDestroy() {
