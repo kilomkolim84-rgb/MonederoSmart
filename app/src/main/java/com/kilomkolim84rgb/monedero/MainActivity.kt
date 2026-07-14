@@ -16,17 +16,14 @@ import androidx.compose.ui.unit.sp
 import com.google.firebase.database.*
 
 class MainActivity : ComponentActivity() {
-    // INSTANCIA DE FIREBASE
     private val db = FirebaseDatabase.getInstance().reference
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent { PantallaPrincipal() }
-        // CARGAMOS LOS DATOS AL INICIAR
         escucharDatosFirebase()
     }
 
-    // VARIABLES DONDE GUARDAMOS LO QUE VIENE
     private var totalSoles by mutableStateOf(0)
     private var ultimoIngreso by mutableStateOf("-")
     private var temperatura by mutableStateOf("-- °C")
@@ -34,7 +31,7 @@ class MainActivity : ComponentActivity() {
     private var energia by mutableStateOf("-- A")
 
     private fun escucharDatosFirebase() {
-        // ESCUCHA EL TOTAL
+        // TOTAL
         db.child("total_soles").addValueEventListener(object : ValueEventListener {
             override fun onSnapshot(snapshot: DataSnapshot) {
                 totalSoles = snapshot.getValue(Int::class.java) ?: 0
@@ -44,7 +41,7 @@ class MainActivity : ComponentActivity() {
             }
         })
 
-        // ESCUCHA ÚLTIMO MOVIMIENTO
+        // ÚLTIMO MOVIMIENTO
         db.child("ultimo_movimiento").addValueEventListener(object : ValueEventListener {
             override fun onSnapshot(snapshot: DataSnapshot) {
                 ultimoIngreso = snapshot.getValue(String::class.java) ?: "-"
@@ -52,7 +49,7 @@ class MainActivity : ComponentActivity() {
             override fun onError(error: DatabaseError) {}
         })
 
-        // ESCUCHA SENSORES
+        // TEMPERATURA
         db.child("sensores/temperatura").addValueEventListener(object : ValueEventListener {
             override fun onSnapshot(snapshot: DataSnapshot) {
                 val t = snapshot.getValue(Double::class.java)
@@ -61,6 +58,7 @@ class MainActivity : ComponentActivity() {
             override fun onError(error: DatabaseError) {}
         })
 
+        // VOLTAJE
         db.child("sensores/voltaje").addValueEventListener(object : ValueEventListener {
             override fun onSnapshot(snapshot: DataSnapshot) {
                 val v = snapshot.getValue(Double::class.java)
@@ -69,6 +67,7 @@ class MainActivity : ComponentActivity() {
             override fun onError(error: DatabaseError) {}
         })
 
+        // ENERGÍA / CORRIENTE
         db.child("sensores/corriente").addValueEventListener(object : ValueEventListener {
             override fun onSnapshot(snapshot: DataSnapshot) {
                 val a = snapshot.getValue(Double::class.java)
@@ -91,7 +90,6 @@ class MainActivity : ComponentActivity() {
             ) {
                 Text("MONEDERO SMART", fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 16.dp))
 
-                // BOTONES CON SU VALOR ADENTRO
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     BotonDato("TEMPERATURA", temperatura)
                     BotonDato("VOLTAJE", voltaje)
@@ -100,7 +98,6 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // BOTÓN VACIAR
                 Button(
                     onClick = { vaciarMonedero() },
                     colors = ButtonDefaults.buttonColors(MaterialTheme.colorScheme.error),
@@ -111,7 +108,6 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // TOTAL GRANDE
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                     Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("TOTAL ACUMULADO", fontSize = 16.sp)
@@ -127,7 +123,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // BOTÓN QUE MUESTRA TEXTO Y SU VALOR
     @Composable
     fun BotonDato(etiqueta: String, valor: String) {
         Card(modifier = Modifier.size(90.dp, 55.dp), shape = RoundedCornerShape(18.dp)) {
@@ -138,7 +133,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // FUNCIÓN PARA VACIAR (SE PUEDE PONER CONFIRMACIÓN DESPUÉS)
     private fun vaciarMonedero() {
         db.child("total_soles").setValue(0)
         db.child("ultimo_movimiento").setValue("Monedero vaciado")
