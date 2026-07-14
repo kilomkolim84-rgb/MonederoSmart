@@ -21,8 +21,7 @@ import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
 
-// ✅ TU CLAVE DE 6 DÍGITOS, CAMBIA AQUÍ SI QUIERES OTRA
-const val CLAVE_VACIADO = "123456"
+const val CLAVE_VACIADO = "222777"
 
 data class Movimiento(
     val fechaHora: String = "",
@@ -45,7 +44,6 @@ class MainActivity : ComponentActivity() {
             vozLista = estado == TextToSpeech.SUCCESS
             if(vozLista) tts?.language = Locale("es", "PE")
         }
-
         setContent { PantallaPrincipal() }
         escucharDatos()
         cargarHistorialGuardado()
@@ -89,7 +87,6 @@ class MainActivity : ComponentActivity() {
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val nuevoTotal = snapshot.getValue(Int::class.java) ?: 0
-
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
@@ -99,7 +96,6 @@ class MainActivity : ComponentActivity() {
                     db.child("ultimo_movimiento").setValue("Ingreso: $cuantoEntro soles")
                     hablar("Ingreso $cuantoEntro soles. Total $nuevoTotal soles")
                 }
-
                 totalAnterior = nuevoTotal
                 totalGeneral = nuevoTotal
             }
@@ -115,7 +111,6 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(e: DatabaseError) {}
         })
 
-        // SENSORES
         db.child("sensores/temperatura").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(s: DataSnapshot) {
                 val v = s.getValue(Double::class.java)
@@ -150,7 +145,7 @@ class MainActivity : ComponentActivity() {
                     .padding(padding)
                     .padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                // ✅ AQUÍ ESTABA EL ERROR, YA ESTÁ PERFECTO:
+                // ✅ AQUÍ ESTABA EL ÚNICO ERROR, YA QUEDÓ BIEN:
                 verticalArrangement = Arrangement.Top
             ) {
                 Text("MONEDERO SMART", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp))
@@ -197,7 +192,6 @@ class MainActivity : ComponentActivity() {
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // IZQUIERDA: FECHA Y MONTOS
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(mov.fechaHora, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     if(mov.detalle == "Monedero vaciado"){
@@ -206,33 +200,19 @@ class MainActivity : ComponentActivity() {
                                         Text("+${mov.montoIngresado} | Total: ${mov.totalAcumulado}", fontSize = 12.sp)
                                     }
                                 }
-
-                                // DERECHA: FOTO + MAC/IP + QR
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Card(
-                                        modifier = Modifier.size(45.dp, 45.dp),
-                                        shape = RoundedCornerShape(6.dp),
-                                        colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceVariant)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Text("📷", fontSize = 18.sp)
-                                        }
+                                    Card(modifier = Modifier.size(45.dp, 45.dp), shape = RoundedCornerShape(6.dp), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceVariant)) {
+                                        Box(contentAlignment = Alignment.Center) { Text("📷", fontSize = 18.sp) }
                                     }
                                     Column(modifier = Modifier.width(100.dp)) {
                                         Text("MAC: ${mov.mac}", fontSize = 10.sp)
                                         Text("IP: ${mov.ip}", fontSize = 10.sp)
                                     }
-                                    Card(
-                                        modifier = Modifier.size(45.dp, 45.dp),
-                                        shape = RoundedCornerShape(6.dp),
-                                        colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceVariant)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Text("QR", fontSize = 10.sp, fontWeight = FontWeight.Medium)
-                                        }
+                                    Card(modifier = Modifier.size(45.dp, 45.dp), shape = RoundedCornerShape(6.dp), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceVariant)) {
+                                        Box(contentAlignment = Alignment.Center) { Text("QR", fontSize = 10.sp, fontWeight = FontWeight.Medium) }
                                     }
                                 }
                             }
@@ -243,11 +223,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // VENTANA DE CLAVE DE SEGURIDAD
     private fun pedirClave() {
         val entrada = android.widget.EditText(this)
         entrada.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
-
         AlertDialog.Builder(this)
             .setTitle("CLAVE DE SEGURIDAD")
             .setMessage("Escribe tu clave de 6 dígitos:")
@@ -264,7 +242,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun BotonDato(etiqueta: String, valor: String) {
         Card(modifier = Modifier.size(75.dp, 45.dp), shape = RoundedCornerShape(12.dp)) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Text(etiqueta, fontSize = 9.sp, fontWeight = FontWeight.Medium)
                 Text(valor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
