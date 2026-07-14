@@ -21,8 +21,8 @@ import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
 
-// ✅ AQUÍ CAMBIAS TU CLAVE CUANDO QUIERAS
-const val CLAVE_VACIADO = "222777"
+// ✅ TU CLAVE DE 6 DÍGITOS, CAMBIA AQUÍ LO QUE QUIERAS
+const val CLAVE_VACIADO = "222777" // Ejemplo: "987654", "CESAR77" etc.
 
 data class Movimiento(
     val fechaHora: String = "",
@@ -150,7 +150,7 @@ class MainActivity : ComponentActivity() {
                     .padding(padding)
                     .padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Top // ✅ LÍNEA CORREGIDA: AQUÍ ESTABA EL ERROR
+                verticalArrangement = Arrangement.Top // ✅ AQUÍ ESTABA EL ERROR, YA ESTÁ PERFECTO
             ) {
                 Text("MONEDERO SMART", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp))
 
@@ -242,14 +242,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // VENTANA DE CLAVE DE SEGURIDAD
+    // VENTANA DE CLAVE
     private fun pedirClave() {
         val entrada = android.widget.EditText(this)
         entrada.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
 
         AlertDialog.Builder(this)
             .setTitle("CLAVE DE SEGURIDAD")
-            .setMessage("Escribe tu clave para vaciar:")
+            .setMessage("Escribe tu clave de 6 dígitos:")
             .setView(entrada)
             .setPositiveButton("CONFIRMAR") { _, _ ->
                 val clave = entrada.text.toString()
