@@ -1,6 +1,7 @@
 package com.kilomkolim84rgb.monedero
 
 import android.os.Bundle
+import android.speech.tts.TextToSpeech
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -29,12 +30,23 @@ data class Movimiento(
 class MainActivity : ComponentActivity() {
     private val db = FirebaseDatabase.getInstance().reference
     private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
+    private var tts: TextToSpeech? = null
+    private var vozLista = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        tts = TextToSpeech(this) { estado ->
+            vozLista = estado == TextToSpeech.SUCCESS
+            if(vozLista) tts?.language = Locale("es", "PE")
+        }
+
         setContent { PantallaPrincipal() }
         escucharDatos()
-        cargarHistorialGuardado() // ✅ CARGA LO QUE YA HAY EN FIREBASE AL INICIAR
+        cargarHistorialGuardado()
+    }
+
+    private fun hablar(texto: String) {
+        if(vozLista) tts?.speak(texto, TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
     private var totalGeneral by mutableStateOf(0)
@@ -45,7 +57,6 @@ class MainActivity : ComponentActivity() {
     private var energia by mutableStateOf("-- A")
     private var totalAnterior = 0
 
-    // ✅ CARGA EL HISTORIAL GUARDADO EN FIREBASE
     private fun cargarHistorialGuardado() {
         db.child("historial").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -77,6 +88,9 @@ class MainActivity : ComponentActivity() {
                     val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal)
                     historial = listOf(nuevoMov) + historial
                     db.child("historial").push().setValue(nuevoMov)
+                    // ✅ SE ACTUALIZA EL TEXTO "ÚLTIMO INGRESO"
+                    db.child("ultimo_movimiento").setValue("Ingreso: $cuantoEntro soles")
+                    hablar("Ingreso $cuantoEntro soles. Total $nuevoTotal soles")
                 }
 
                 totalAnterior = nuevoTotal
@@ -167,13 +181,36 @@ class MainActivity : ComponentActivity() {
                 LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     items(historial) { mov ->
                         Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                            Column(modifier = Modifier.padding(10.dp)) {
-                                Text("📅 ${mov.fechaHora}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                if(mov.detalle == "Monedero vaciado"){
-                                    Text("⚠️ ${mov.detalle}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
-                                } else {
-                                    Text("💵 ${mov.detalle}: ${mov.montoIngresado} soles", fontSize = 14.sp)
-                                    Text("🧾 Total: ${mov.totalAcumulado} soles", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("📅 ${mov.fechaHora}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if(mov.detalle == "Monedero vaciado"){
+                                        Text("⚠️ ${mov.detalle}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                                    } else {
+                                        Text("💵 ${mov.detalle}: ${mov.montoIngresado} soles", fontSize = 14.sp)
+                                        Text("🧾 Total: ${mov.totalAcumulado} soles", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                    }
+                                }
+                                Card(
+                                    modifier = Modifier.size(60.dp, 60.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            "Código\nQR",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            lineHeight = 12.sp,
+                                            modifier = Modifier.padding(4.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -201,14 +238,20 @@ class MainActivity : ComponentActivity() {
             montoIngresado = 0,
             totalAcumulado = 0
         )
-        // ✅ AGREGA EL REGISTRO ARRIBA DE TODO Y LO GUARDA
         historial = listOf(registroVaciado) + historial
         db.child("historial").push().setValue(registroVaciado)
 
         db.child("total_general").setValue(0)
         db.child("ultimo_movimiento").setValue("Monedero vaciado")
-        totalAnterior = 0 // ✅ REINICIA PARA EMPEZAR DE CERO
+        totalAnterior = 0
+        hablar("Monedero vaciado")
 
         Toast.makeText(this, "Monedero vaciado ✅", Toast.LENGTH_SHORT).show()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        tts?.stop()
+        tts?.shutdown()
     }
 }
