@@ -146,7 +146,7 @@ class MainActivity : ComponentActivity() {
                     .padding(padding)
                     .padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Top
+                verticalArrangement = Arrangement.Top // ✅ AQUÍ ESTABA EL ERROR, YA ESTÁ CORREGIDO
             ) {
                 Text("MONEDERO SMART", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp))
 
@@ -192,7 +192,7 @@ class MainActivity : ComponentActivity() {
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // ✅ LADO IZQUIERDO: SOLO FECHA Y MONTOS
+                                // LADO IZQUIERDO: FECHA Y MONTOS
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(mov.fechaHora, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     if(mov.detalle == "Monedero vaciado"){
@@ -202,7 +202,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
 
-                                // ✅ LADO DERECHO: FOTO + DATOS + QR (TAMAÑO AJUSTADO)
+                                // LADO DERECHO: FOTO + DATOS + QR
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
@@ -241,7 +241,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun BotonDato(etiqueta: String, valor: String) {
         Card(modifier = Modifier.size(75.dp, 45.dp), shape = RoundedCornerShape(12.dp)) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Text(etiqueta, fontSize = 9.sp, fontWeight = FontWeight.Medium)
                 Text(valor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
