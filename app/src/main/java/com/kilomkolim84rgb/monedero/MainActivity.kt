@@ -188,29 +188,46 @@ class MainActivity : ComponentActivity() {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(8.dp),
+                                    .padding(10.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // DATOS PRINCIPALES
+                                // ✅ LADO IZQUIERDO: SOLO FECHA Y MONTOS
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text("${mov.fechaHora}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(mov.fechaHora, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     if(mov.detalle == "Monedero vaciado"){
-                                        Text("⚠️ Vaciado", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                                        Text("⚠️ Vaciado", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
                                     } else {
-                                        Text("+${mov.montoIngresado} | Total:${mov.totalAcumulado}", fontSize = 11.sp)
+                                        Text("+${mov.montoIngresado} | Total: ${mov.totalAcumulado}", fontSize = 12.sp)
                                     }
-                                    // ✅ DATOS PEQUEÑOS EN LA MISMA LÍNEA
-                                    Text("📷 | MAC:${mov.mac} | IP:${mov.ip}", fontSize = 9.sp)
                                 }
-                                // QR PEQUEÑO
-                                Card(
-                                    modifier = Modifier.size(40.dp, 40.dp),
-                                    shape = RoundedCornerShape(6.dp),
-                                    colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceVariant)
+
+                                // ✅ LADO DERECHO: FOTO + DATOS + QR (TAMAÑO AJUSTADO)
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text("QR", fontSize = 9.sp, fontWeight = FontWeight.Medium)
+                                    Card(
+                                        modifier = Modifier.size(45.dp, 45.dp),
+                                        shape = RoundedCornerShape(6.dp),
+                                        colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceVariant)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text("📷", fontSize = 18.sp)
+                                        }
+                                    }
+                                    Column(modifier = Modifier.width(100.dp)) {
+                                        Text("MAC: ${mov.mac}", fontSize = 10.sp)
+                                        Text("IP: ${mov.ip}", fontSize = 10.sp)
+                                    }
+                                    Card(
+                                        modifier = Modifier.size(45.dp, 45.dp),
+                                        shape = RoundedCornerShape(6.dp),
+                                        colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceVariant)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text("QR", fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                                        }
                                     }
                                 }
                             }
@@ -224,7 +241,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun BotonDato(etiqueta: String, valor: String) {
         Card(modifier = Modifier.size(75.dp, 45.dp), shape = RoundedCornerShape(12.dp)) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Alignment.Center) {
                 Text(etiqueta, fontSize = 9.sp, fontWeight = FontWeight.Medium)
                 Text(valor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
