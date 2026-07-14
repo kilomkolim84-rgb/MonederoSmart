@@ -1,105 +1,147 @@
 package com.kilomkolim84rgb.monedero
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.firebase.database.*
 
 class MainActivity : ComponentActivity() {
+    // INSTANCIA DE FIREBASE
+    private val db = FirebaseDatabase.getInstance().reference
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent { PantallaPrincipal() }
+        // CARGAMOS LOS DATOS AL INICIAR
+        escucharDatosFirebase()
     }
-}
 
-@Composable
-fun PantallaPrincipal() {
-    Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp, vertical = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top
-        ) {
-            // TÍTULO
-            Text(
-                text = "MONEDERO SMART",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 20.dp)
-            )
+    // VARIABLES DONDE GUARDAMOS LO QUE VIENE
+    private var totalSoles by mutableStateOf(0)
+    private var ultimoIngreso by mutableStateOf("-")
+    private var temperatura by mutableStateOf("-- °C")
+    private var voltaje by mutableStateOf("-- V")
+    private var energia by mutableStateOf("-- A")
 
-            // FILA DE 3 BOTONES PRINCIPALES
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                BotonSimple(texto = "TEMPERATURA")
-                BotonSimple(texto = "VOLTAJE")
-                BotonSimple(texto = "ENERGÍA")
+    private fun escucharDatosFirebase() {
+        // ESCUCHA EL TOTAL
+        db.child("total_soles").addValueEventListener(object : ValueEventListener {
+            override fun onSnapshot(snapshot: DataSnapshot) {
+                totalSoles = snapshot.getValue(Int::class.java) ?: 0
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // BOTÓN DE VACIAR / LIMPIAR
-            Button(
-                onClick = {},
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("VACIAR MONEDERO", fontSize = 12.sp)
+            override fun onError(error: DatabaseError) {
+                Toast.makeText(this@MainActivity, "Sin conexión", Toast.LENGTH_SHORT).show()
             }
+        })
 
-            Spacer(modifier = Modifier.height(32.dp))
+        // ESCUCHA ÚLTIMO MOVIMIENTO
+        db.child("ultimo_movimiento").addValueEventListener(object : ValueEventListener {
+            override fun onSnapshot(snapshot: DataSnapshot) {
+                ultimoIngreso = snapshot.getValue(String::class.java) ?: "-"
+            }
+            override fun onError(error: DatabaseError) {}
+        })
 
-            // TOTAL MUY GRANDE Y RESALTADO
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        // ESCUCHA SENSORES
+        db.child("sensores/temperatura").addValueEventListener(object : ValueEventListener {
+            override fun onSnapshot(snapshot: DataSnapshot) {
+                val t = snapshot.getValue(Double::class.java)
+                temperatura = if(t!=null) String.format("%.1f °C", t) else "-- °C"
+            }
+            override fun onError(error: DatabaseError) {}
+        })
+
+        db.child("sensores/voltaje").addValueEventListener(object : ValueEventListener {
+            override fun onSnapshot(snapshot: DataSnapshot) {
+                val v = snapshot.getValue(Double::class.java)
+                voltaje = if(v!=null) String.format("%.1f V", v) else "-- V"
+            }
+            override fun onError(error: DatabaseError) {}
+        })
+
+        db.child("sensores/corriente").addValueEventListener(object : ValueEventListener {
+            override fun onSnapshot(snapshot: DataSnapshot) {
+                val a = snapshot.getValue(Double::class.java)
+                energia = if(a!=null) String.format("%.2f A", a) else "-- A"
+            }
+            override fun onError(error: DatabaseError) {}
+        })
+    }
+
+    @Composable
+    fun PantallaPrincipal() {
+        Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Top
             ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("TOTAL ACUMULADO", fontSize = 16.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "0 SOLES",
-                        fontSize = 48.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("Último ingreso: -", fontSize = 16.sp)
+                Text("MONEDERO SMART", fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 16.dp))
+
+                // BOTONES CON SU VALOR ADENTRO
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    BotonDato("TEMPERATURA", temperatura)
+                    BotonDato("VOLTAJE", voltaje)
+                    BotonDato("ENERGÍA", energia)
                 }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // BOTÓN VACIAR
+                Button(
+                    onClick = { vaciarMonedero() },
+                    colors = ButtonDefaults.buttonColors(MaterialTheme.colorScheme.error),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("VACIAR MONEDERO", fontSize = 12.sp)
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // TOTAL GRANDE
+                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                    Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("TOTAL ACUMULADO", fontSize = 16.sp)
+                        Text("$totalSoles SOLES", fontSize = 48.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Último ingreso: $ultimoIngreso", fontSize = 15.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Historial de movimientos", fontSize = 14.sp, fontWeight = FontWeight.Medium)
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ESPACIO PARA HISTORIAL (LO METEMOS DESPUÉS CON FIREBASE)
-            Text("Historial de movimientos", fontSize = 14.sp, fontWeight = FontWeight.Medium)
         }
     }
-}
 
-@Composable
-fun BotonSimple(texto: String) {
-    Button(
-        onClick = {},
-        modifier = Modifier.size(90.dp, 45.dp),
-        shape = RoundedCornerShape(20.dp),
-        contentPadding = PaddingValues(4.dp)
-    ) {
-        Text(texto, fontSize = 11.sp)
+    // BOTÓN QUE MUESTRA TEXTO Y SU VALOR
+    @Composable
+    fun BotonDato(etiqueta: String, valor: String) {
+        Card(modifier = Modifier.size(90.dp, 55.dp), shape = RoundedCornerShape(18.dp)) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Text(etiqueta, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                Text(valor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+
+    // FUNCIÓN PARA VACIAR (SE PUEDE PONER CONFIRMACIÓN DESPUÉS)
+    private fun vaciarMonedero() {
+        db.child("total_soles").setValue(0)
+        db.child("ultimo_movimiento").setValue("Monedero vaciado")
+        Toast.makeText(this, "Monedero vaciado ✅", Toast.LENGTH_SHORT).show()
     }
 }
