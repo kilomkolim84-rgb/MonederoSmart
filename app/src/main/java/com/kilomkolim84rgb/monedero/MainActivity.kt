@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -26,16 +27,19 @@ fun PantallaPrincipal() {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceEvenly
+            verticalArrangement = Arrangement.Top
         ) {
+            // TÍTULO
             Text(
                 text = "MONEDERO SMART",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 20.dp)
             )
 
+            // FILA DE 3 BOTONES PRINCIPALES
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
@@ -45,14 +49,45 @@ fun PantallaPrincipal() {
                 BotonSimple(texto = "ENERGÍA")
             }
 
-            Card(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("TOTAL ACUMULADO", fontSize = 14.sp)
-                    Text("0 SOLES", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // BOTÓN DE VACIAR / LIMPIAR
+            Button(
+                onClick = {},
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("VACIAR MONEDERO", fontSize = 12.sp)
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // TOTAL MUY GRANDE Y RESALTADO
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("TOTAL ACUMULADO", fontSize = 16.sp)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("Último ingreso: -", fontSize = 15.sp)
+                    Text(
+                        text = "0 SOLES",
+                        fontSize = 48.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Último ingreso: -", fontSize = 16.sp)
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ESPACIO PARA HISTORIAL (LO METEMOS DESPUÉS CON FIREBASE)
+            Text("Historial de movimientos", fontSize = 14.sp, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -61,9 +96,10 @@ fun PantallaPrincipal() {
 fun BotonSimple(texto: String) {
     Button(
         onClick = {},
-        modifier = Modifier.size(80.dp, 50.dp),
-        contentPadding = PaddingValues(2.dp)
+        modifier = Modifier.size(90.dp, 45.dp),
+        shape = RoundedCornerShape(20.dp),
+        contentPadding = PaddingValues(4.dp)
     ) {
-        Text(texto, fontSize = 10.sp)
+        Text(texto, fontSize = 11.sp)
     }
 }
