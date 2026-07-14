@@ -1,13 +1,10 @@
 package com.kilomkolim84rgb.monedero
 
 import android.os.Bundle
-import android.speech.tts.TextToSpeech
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,34 +14,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.database.*
-import java.util.Locale
-
-data class Movimiento(
-    val fecha: String = "",
-    val monto: Int = 0,
-    val total: Int = 0
-)
 
 class MainActivity : ComponentActivity() {
     private val db = FirebaseDatabase.getInstance().reference
-    private var tts: TextToSpeech? = null
-    private var vozLista = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // INICIAMOS LA VOZ CON SEGURIDAD
-        tts = TextToSpeech(this) { estado ->
-            vozLista = estado == TextToSpeech.SUCCESS
-            if(vozLista) tts?.language = Locale("es", "PE")
-        }
-
         setContent { PantallaPrincipal() }
-        escucharDatosFirebase()
-    }
-
-    private fun hablar(texto: String) {
-        if(vozLista) tts?.speak(texto, TextToSpeech.QUEUE_FLUSH, null, null)
+        escucharTotal()
     }
 
     private var totalSoles by mutableStateOf(0)
@@ -52,75 +29,47 @@ class MainActivity : ComponentActivity() {
     private var temperatura by mutableStateOf("-- °C")
     private var voltaje by mutableStateOf("-- V")
     private var energia by mutableStateOf("-- A")
-    private var historial by mutableStateOf(listOf<Movimiento>())
-    private var totalAnterior = 0
 
-    private fun escucharDatosFirebase() {
-        // TOTAL GENERAL
+    private fun escucharTotal() {
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val nuevo = snapshot.getValue(Int::class.java) ?: 0
-                if(nuevo > totalAnterior){
-                    val cuanto = nuevo - totalAnterior
-                    hablar("Ingreso $cuanto soles. Total $nuevo soles")
-                }
-                totalAnterior = totalSoles
-                totalSoles = nuevo
+                totalSoles = snapshot.getValue(Int::class.java) ?: 0
             }
-            override fun onCancelled(e: DatabaseError) {
+            override fun onCancelled(error: DatabaseError) {
                 Toast.makeText(this@MainActivity, "Sin conexión", Toast.LENGTH_SHORT).show()
             }
         })
 
-        // ÚLTIMO MOVIMIENTO
         db.child("ultimo_movimiento").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(s: DataSnapshot) {
-                ultimoIngreso = s.getValue(String::class.java) ?: "-"
+            override fun onDataChange(snapshot: DataSnapshot) {
+                ultimoIngreso = snapshot.getValue(String::class.java) ?: "-"
             }
-            override fun onCancelled(e: DatabaseError) {}
-        })
-
-        // HISTORIAL
-        db.child("historial").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(s: DataSnapshot) {
-                val lista = mutableListOf<Movimiento>()
-                s.children.forEach {
-                    lista.add(
-                        Movimiento(
-                            fecha = it.child("fecha").getValue(String::class.java) ?: "",
-                            monto = it.child("monto").getValue(Int::class.java) ?: 0,
-                            total = it.child("total").getValue(Int::class.java) ?: 0
-                        )
-                    )
-                }
-                historial = lista.reversed()
-            }
-            override fun onCancelled(e: DatabaseError) {}
+            override fun onCancelled(error: DatabaseError) {}
         })
 
         // SENSORES
         db.child("sensores/temperatura").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(s: DataSnapshot) {
-                val v = s.getValue(Double::class.java)
-                temperatura = if(v!=null) String.format("%.1f °C", v) else "-- °C"
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val t = snapshot.getValue(Double::class.java)
+                temperatura = if(t!=null) String.format("%.1f °C", t) else "-- °C"
             }
-            override fun onCancelled(e: DatabaseError) {}
+            override fun onCancelled(error: DatabaseError) {}
         })
 
         db.child("sensores/voltaje").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(s: DataSnapshot) {
-                val v = s.getValue(Double::class.java)
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val v = snapshot.getValue(Double::class.java)
                 voltaje = if(v!=null) String.format("%.1f V", v) else "-- V"
             }
-            override fun onCancelled(e: DatabaseError) {}
+            override fun onCancelled(error: DatabaseError) {}
         })
 
         db.child("sensores/corriente").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(s: DataSnapshot) {
-                val v = s.getValue(Double::class.java)
-                energia = if(v!=null) String.format("%.2f A", v) else "-- A"
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val a = snapshot.getValue(Double::class.java)
+                energia = if(a!=null) String.format("%.2f A", a) else "-- A"
             }
-            override fun onCancelled(e: DatabaseError) {}
+            override fun onCancelled(error: DatabaseError) {}
         })
     }
 
@@ -166,18 +115,6 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("Historial de movimientos", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                Spacer(modifier = Modifier.height(8.dp))
-
-                LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                    items(historial) { m ->
-                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                            Column(modifier = Modifier.padding(8.dp)) {
-                                Text(m.fecha, fontSize = 12.sp)
-                                Text("Ingreso: ${m.monto} soles | Total: ${m.total} soles", fontSize = 13.sp)
-                            }
-                        }
-                    }
-                }
             }
         }
     }
@@ -195,13 +132,6 @@ class MainActivity : ComponentActivity() {
     private fun vaciar() {
         db.child("total_general").setValue(0)
         db.child("ultimo_movimiento").setValue("Monedero vaciado")
-        hablar("Monedero vaciado")
         Toast.makeText(this, "Monedero vaciado ✅", Toast.LENGTH_SHORT).show()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        tts?.stop()
-        tts?.shutdown()
     }
 }
