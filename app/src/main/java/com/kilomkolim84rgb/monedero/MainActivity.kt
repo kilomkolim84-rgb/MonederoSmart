@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
     private var historial by mutableStateOf(listOf<Movimiento>())
     private var temperatura by mutableStateOf("-- °C")
     private var voltaje by mutableStateOf("-- V")
-    private var distanciaRayos by mutableStateOf("-- km") // ✅ NUEVO: DISTANCIA DE RAYOS
+    private var distanciaRayos by mutableStateOf("-- km")
     private var totalAnterior = 0
 
     private fun cargarHistorialGuardado() {
@@ -114,7 +114,6 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(e: DatabaseError) {}
         })
 
-        // ✅ SENSOR DE TEMPERATURA
         db.child("sensores/temperatura").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(s: DataSnapshot) {
                 val v = s.getValue(Double::class.java)
@@ -123,7 +122,6 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(e: DatabaseError) {}
         })
 
-        // ✅ SENSOR DE VOLTAJE DE BATERÍA
         db.child("sensores/voltaje").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(s: DataSnapshot) {
                 val v = s.getValue(Double::class.java)
@@ -132,12 +130,10 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(e: DatabaseError) {}
         })
 
-        // ✅ SENSOR DE RAYOS (DISTANCIA EN KM)
         db.child("sensores/rayos_distancia").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(s: DataSnapshot) {
                 val v = s.getValue(Double::class.java)
                 distanciaRayos = if(v!=null) String.format("%.0f km", v) else "-- km"
-                // ✅ Aquí después agregaremos el aviso por voz/WhatsApp cuando detecte cerca
             }
             override fun onCancelled(e: DatabaseError) {}
         })
@@ -159,7 +155,6 @@ class MainActivity : ComponentActivity() {
             ) {
                 Text("MONEDERO SMART", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp), color = Color.Black)
 
-                // ✅ TRES TARJETAS: TEMP, VOLTAJE, RAYOS (TODAS FONDO AMARILLO)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     BotonDato("TEMP", temperatura)
                     BotonDato("VOLT", voltaje)
@@ -179,7 +174,6 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // ✅ TARJETA DEL TOTAL: FONDO VERDE LIMÓN
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -197,7 +191,6 @@ class MainActivity : ComponentActivity() {
                 Text("Historial", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.Black)
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // ✅ SECCIÓN HISTORIAL: FONDO CELESTE SUAVE
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -276,11 +269,15 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun BotonDato(etiqueta: String, valor: String) {
         Card(
-            modifier = Modifier.size(75.dp, 45.dp),
+            modifier = Modifier.size(90.dp, 50.dp),
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEB3B)) // Fondo amarillo
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEB3B))
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally, // ✅ CENTRADO HORIZONTAL
+                verticalArrangement = Arrangement.Center // ✅ CENTRADO VERTICAL
+            ) {
                 Text(etiqueta, fontSize = 9.sp, fontWeight = FontWeight.Medium, color = Color.Black)
                 Text(valor, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black)
             }
