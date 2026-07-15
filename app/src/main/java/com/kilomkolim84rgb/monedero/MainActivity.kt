@@ -50,21 +50,21 @@ data class Movimiento(
     val ip: String = "--"
 )
 
-// SERVICIO EN SEGUNDO PLANO
+// SERVICIO EN SEGUNDO PLANO - SIN DECLARACIONES QUE FALLEN
 class ServicioMonedero : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         crearCanalServicio()
-        // AQUÍ NO HAY NINGUNA DECLARACIÓN DE TIPO QUE FALLE
-        val constructorNotif = NotificationCompat.Builder(this, CANAL_SERVICIO)
+        // ✅ NO HAY NINGUNA DECLARACIÓN DE TIPO "Notification" AQUÍ
+        val constructor = NotificationCompat.Builder(this, CANAL_SERVICIO)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("Monedero Smart activo")
             .setContentText("Esperando ingresos...")
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
         
-        startForeground(ID_SERVICIO, constructorNotif.build())
+        startForeground(ID_SERVICIO, constructor.build())
         return START_STICKY
     }
 
@@ -131,7 +131,7 @@ class MainActivity : ComponentActivity() {
             else -> "$monto soles"
         }
 
-        val notif = NotificationCompat.Builder(this, CANAL_NOTIFICACIONES)
+        val aviso = NotificationCompat.Builder(this, CANAL_NOTIFICACIONES)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("✅ DINERO RECIBIDO")
             .setContentText("Entró $texto | Total: $total soles")
@@ -141,7 +141,7 @@ class MainActivity : ComponentActivity() {
             .build()
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-            NotificationManagerCompat.from(this).notify(2001, notif)
+            NotificationManagerCompat.from(this).notify(2001, aviso)
         }
     }
 
