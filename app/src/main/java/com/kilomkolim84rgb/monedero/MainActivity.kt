@@ -35,7 +35,6 @@ import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
 
-// CONFIGURACIONES
 const val CLAVE_VACIADO = "123456"
 const val CANAL_NOTIFICACIONES = "canal_monedero"
 const val CANAL_SERVICIO = "servicio_monedero"
@@ -50,21 +49,20 @@ data class Movimiento(
     val ip: String = "--"
 )
 
-// SERVICIO SIN NINGUNA DECLARACIÓN QUE FALLE
 class ServicioMonedero : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         crearCanalServicio()
-        // ✅ AQUÍ NO HAY NINGUNA PALABRA QUE DIGA "Notification"
-        val constructorNotif = NotificationCompat.Builder(this, CANAL_SERVICIO)
+        // ✅ SIN NINGUNA DECLARACIÓN QUE FALLE
+        val constructor = NotificationCompat.Builder(this, CANAL_SERVICIO)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("Monedero Smart activo")
             .setContentText("Esperando ingresos...")
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
         
-        startForeground(ID_SERVICIO, constructorNotif.build())
+        startForeground(ID_SERVICIO, constructor.build())
         return START_STICKY
     }
 
