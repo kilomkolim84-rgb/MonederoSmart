@@ -64,8 +64,11 @@ class MainActivity : ComponentActivity() {
         }
 
         crearCanalNotificaciones()
+        
         pedirPermisoNotificaciones()
-
+        startForegroundService(Intent(this, 
+        EscuchaFirebaseService::class.java))
+        
         setContent { PantallaPrincipal() }
         escucharDatos()
         cargarHistorialGuardado()
@@ -430,3 +433,102 @@ class MainActivity : ComponentActivity() {
         tts?.shutdown()
     }
 }
+// ✅ SERVICIO QUE MANTIENE LA APP DESPIERTA AUNQUE LA CIERRES
+class EscuchaFirebaseService : android.app.Service() {
+    private val db = FirebaseDatabase.getInstance().reference
+    private var totalAnterior = 0
+    private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
+    private var tts: TextToSpeech? = null
+    private var vozLista = false
+
+    override fun onCreate() {
+        super.onCreate()
+        db.keepSynced(true)
+        
+        val notificacion = NotificationCompat.Builder(this, CANAL_NOTIFICACIONES)
+            .setSmallIcon(android.R.drawable.ic_menu_info_details)
+            .setContentTitle("Monedero activo")
+            .setContentText("Escuchando ingresos...")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .build()
+        
+        startForeground(1002, notificacion)
+
+        tts = TextToSpeech(this) { estado ->
+            vozLista = estado == TextToSpeech.SUCCESS
+            if(vozLista) tts?.language = Locale("es", "PE")
+        }
+
+        db.child("total_general").addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                totalAnterior = snapshot.getValue(Int::class.java) ?: 0
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        })
+
+        db.child("total_general").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val nuevoTotal = snapshot.getValue(Int::class.java) ?: 0
+                if(nuevoTotal > totalAnterior){
+                    val cuantoEntro = nuevoTotal - totalAnterior
+                    val fecha = formatoFecha.format(Date())
+                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal)
+                    db.child("historial").push().setValue(nuevoMov)
+                    db.child("ultimo_movimiento").setValue("Ingreso: $cuantoEntro soles")
+                    
+                    if(vozLista){
+                        val texto = when(cuantoEntro){
+                            1 -> "un sol"
+                            2 -> "dos soles"
+                            3 -> "tres soles"
+                            4 -> "cuatro soles"
+                            5 -> "cinco soles"
+                            else -> "$cuantoEntro soles"
+                        }
+                        tts?.speak(texto, TextToSpeech.QUEUE_FLUSH, null, null)
+                    }
+                    
+                    val textoMonto = when(cuantoEntro) {
+                        1 -> "un sol"
+                        2 -> "dos soles"
+                        3 -> "tres soles"
+                        4 -> "cuatro soles"
+                        5 -> "cinco soles"
+                        else -> "$cuantoEntro soles"
+                    }
+                    
+                    val intent = Intent(this@EscuchaFirebaseService, MainActivity::class.java)
+                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    val pendingIntent = PendingIntent.getActivity(
+                        this@EscuchaFirebaseService,
+                        0,
+                        intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    
+                    val aviso = NotificationCompat.Builder(this@EscuchaFirebaseService, CANAL_NOTIFICACIONES)
+                        .setSmallIcon(android.R.drawable.ic_menu_info_details)
+                        .setContentTitle("✅ INGRESO REGISTRADO")
+                        .setContentText("Entró $textoMonto | Total: $nuevoTotal soles")
+                        .setPriority(NotificationCompat.PRIORITY_HIGH)
+                        .setAutoCancel(true)
+                        .setContentIntent(pendingIntent)
+                        .build()
+                    
+                    NotificationManagerCompat.from(this@EscuchaFirebaseService).notify(1001, aviso)
+                }
+                totalAnterior = nuevoTotal
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        })
+    }
+
+    override fun onBind(intent: Intent?) = null
+    override fun onDestroy() {
+        super.onDestroy()
+        tts?.stop()
+        tts?.shutdown()
+    }
+}
+
