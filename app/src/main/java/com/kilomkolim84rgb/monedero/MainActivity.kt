@@ -1,12 +1,12 @@
 package com.kilomkolim84rgb.monedero
 
 import android.app.AlertDialog
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
-import android.os.Bundle // ✅ AGREGADO: FALTABA ESTE IMPORT
+import android.os.Bundle
+import android.os.Build // ✅ AGREGADO: ARREGA EL ERROR DE "Unresolved reference: Build"
 import android.os.IBinder
 import android.speech.tts.TextToSpeech
 import android.widget.Toast
@@ -36,7 +36,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 // ✅ CONFIGURACIONES
-const val CLAVE_VACIADO = "123456"
+const val CLAVE_VACIADO = "222777"
 const val CANAL_NOTIFICACIONES = "canal_monedero"
 const val CANAL_SERVICIO = "servicio_monedero"
 const val ID_SERVICIO = 12345
@@ -89,7 +89,7 @@ class MainActivity : ComponentActivity() {
 
     private val permisoNotificaciones = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
-    override fun onCreate(savedInstanceState: Bundle?) { // ✅ YA RECONOCE BUNDLE
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         tts = TextToSpeech(this) { estado ->
             vozLista = estado == TextToSpeech.SUCCESS
@@ -99,7 +99,6 @@ class MainActivity : ComponentActivity() {
         crearCanales()
         pedirPermisos()
         
-        // ✅ INICIAMOS EL SERVICIO QUE SE QUEDA ACTIVO
         startForegroundService(Intent(this, ServicioMonedero::class.java))
 
         setContent { PantallaPrincipal() }
@@ -126,7 +125,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ✅ NOTIFICACIÓN QUE LLEGA SIEMPRE
     private fun mostrarNotificacion(monto: Int, total: Int) {
         val texto = when(monto) {
             1 -> "un sol"
@@ -251,15 +249,15 @@ class MainActivity : ComponentActivity() {
                     .fillMaxSize()
                     .padding(padding)
                     .padding(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally, // ✅ CORREGIDO: Alignment correcto
-                verticalArrangement = Arrangement.Top // ✅ CORREGIDO: Arrangement separado
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Top
             ) {
                 Text("MONEDERO SMART", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly, // ✅ CORREGIDO
-                    verticalAlignment = Alignment.CenterVertically // ✅ CORREGIDO
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     BotonDato("TEMP", temperatura)
                     BotonDato("VOLT", voltaje)
@@ -275,7 +273,7 @@ class MainActivity : ComponentActivity() {
                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFFCDFF33))) {
                     Column(
                         modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally // ✅ CORREGIDO
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text("TOTAL", fontSize = 14.sp)
                         Text("$totalGeneral SOLES", fontSize = 36.sp, fontWeight = FontWeight.Bold)
@@ -293,8 +291,8 @@ class MainActivity : ComponentActivity() {
                             Card(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(10.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween, // ✅ CORREGIDO
-                                    verticalAlignment = Alignment.CenterVertically // ✅ CORREGIDO
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(mov.fechaHora, fontSize = 11.sp, color = Color.Gray)
@@ -346,8 +344,8 @@ class MainActivity : ComponentActivity() {
         Card(modifier = Modifier.size(90.dp, 50.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEB3B))) {
             Column(
                 modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally, // ✅ CORREGIDO
-                verticalArrangement = Arrangement.Center // ✅ CORREGIDO
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
                 Text(etiqueta, fontSize = 9.sp, fontWeight = FontWeight.Medium)
                 Text(valor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
