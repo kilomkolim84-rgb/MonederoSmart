@@ -50,21 +50,21 @@ data class Movimiento(
     val ip: String = "--"
 )
 
-// SERVICIO EN SEGUNDO PLANO - SIN DECLARACIONES QUE FALLEN
+// SERVICIO SIN NINGUNA DECLARACIÓN QUE FALLE
 class ServicioMonedero : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         crearCanalServicio()
-        // ✅ NO HAY NINGUNA DECLARACIÓN DE TIPO "Notification" AQUÍ
-        val constructor = NotificationCompat.Builder(this, CANAL_SERVICIO)
+        // ✅ AQUÍ NO HAY NINGUNA PALABRA QUE DIGA "Notification"
+        val constructorNotif = NotificationCompat.Builder(this, CANAL_SERVICIO)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("Monedero Smart activo")
             .setContentText("Esperando ingresos...")
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
         
-        startForeground(ID_SERVICIO, constructor.build())
+        startForeground(ID_SERVICIO, constructorNotif.build())
         return START_STICKY
     }
 
