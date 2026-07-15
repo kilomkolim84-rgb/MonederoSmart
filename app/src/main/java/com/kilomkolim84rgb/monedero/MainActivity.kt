@@ -166,6 +166,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun escucharDatos() {
+        db.keepSynced(true)
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val nuevoTotal = snapshot.getValue(Int::class.java) ?: 0
