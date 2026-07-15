@@ -270,8 +270,25 @@ class MainActivity : ComponentActivity() {
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
-                Text("Historial", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.Black)
-                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+    modifier = Modifier.fillMaxWidth(),
+    horizontalArrangement = Arrangement.SpaceBetween,
+    verticalAlignment = Alignment.CenterVertically
+) {
+    Text("Historial", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.Black)
+    
+    // ✅ BOTÓN LIMPIAR HISTORIAL
+    Button(
+        onClick = { limpiarSoloHistorial() },
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.height(30.dp)
+    ) {
+        Text("LIMPIAR", fontSize = 10.sp)
+    }
+}
+Spacer(modifier = Modifier.height(6.dp))
+
 
                 Column(
                     modifier = Modifier
