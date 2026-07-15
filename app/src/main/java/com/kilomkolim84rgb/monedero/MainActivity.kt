@@ -3,6 +3,8 @@ package com.kilomkolim84rgb.monedero
 import android.app.AlertDialog
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
@@ -101,15 +103,26 @@ class MainActivity : ComponentActivity() {
             else -> "$monto soles"
         }
 
+        // ✅ PARA QUE AL TOCAR LA NOTIFICACIÓN ABRA LA APP
+        val intent = Intent(this, MainActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val aviso = NotificationCompat.Builder(this, CANAL_NOTIFICACIONES)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("✅ INGRESO REGISTRADO")
             .setContentText("Entró $textoMonto | Total: $total soles")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+            .setContentIntent(pendingIntent) // ✅ ABRE LA APP AL TOCAR
             .build()
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICACIONES) == PackageManager.PERMISSION_GRANTED) {
             NotificationManagerCompat.from(this).notify(1001, aviso)
         }
     }
@@ -277,7 +290,6 @@ class MainActivity : ComponentActivity() {
                 ) {
                     Text("Historial", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.Black)
                     
-                    // ✅ BOTÓN LIMPIAR HISTORIAL
                     Button(
                         onClick = { limpiarSoloHistorial() },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
