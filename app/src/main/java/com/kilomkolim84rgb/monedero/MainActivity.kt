@@ -35,7 +35,7 @@ import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
 
-// ✅ CONFIGURACIONES
+// CONFIGURACIONES
 const val CLAVE_VACIADO = "123456"
 const val CANAL_NOTIFICACIONES = "canal_monedero"
 const val CANAL_SERVICIO = "servicio_monedero"
@@ -50,22 +50,21 @@ data class Movimiento(
     val ip: String = "--"
 )
 
-// ✅ SERVICIO SIN NINGUNA REFERENCIA FALLIDA
+// SERVICIO EN SEGUNDO PLANO
 class ServicioMonedero : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         crearCanalServicio()
-        // ✅ SIN TIPO EXPLÍCITO, KOTLIN LO DETECTA SOLO
-        val notificacion = NotificationCompat.Builder(this, CANAL_SERVICIO)
+        // AQUÍ NO HAY NINGUNA DECLARACIÓN DE TIPO QUE FALLE
+        val constructorNotif = NotificationCompat.Builder(this, CANAL_SERVICIO)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("Monedero Smart activo")
             .setContentText("Esperando ingresos...")
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
-            .build()
         
-        startForeground(ID_SERVICIO, notificacion)
+        startForeground(ID_SERVICIO, constructorNotif.build())
         return START_STICKY
     }
 
@@ -99,7 +98,6 @@ class MainActivity : ComponentActivity() {
 
         crearCanales()
         pedirPermisos()
-        
         startForegroundService(Intent(this, ServicioMonedero::class.java))
 
         setContent { PantallaPrincipal() }
@@ -201,7 +199,6 @@ class MainActivity : ComponentActivity() {
                     historial = listOf(nuevoMov) + historial
                     db.child("historial").push().setValue(nuevoMov)
                     db.child("ultimo_movimiento").setValue("Ingreso: $cuantoEntro soles")
-                    
                     hablarMonto(cuantoEntro)
                     mostrarNotificacion(cuantoEntro, nuevoTotal)
                 }
