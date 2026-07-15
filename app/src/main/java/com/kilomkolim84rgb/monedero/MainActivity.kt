@@ -6,7 +6,7 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.os.Bundle
-import android.os.Build // ✅ AGREGADO: ARREGA EL ERROR DE "Unresolved reference: Build"
+import android.os.Build
 import android.os.IBinder
 import android.speech.tts.TextToSpeech
 import android.widget.Toast
@@ -36,7 +36,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 // ✅ CONFIGURACIONES
-const val CLAVE_VACIADO = "222777"
+const val CLAVE_VACIADO = "123456"
 const val CANAL_NOTIFICACIONES = "canal_monedero"
 const val CANAL_SERVICIO = "servicio_monedero"
 const val ID_SERVICIO = 12345
@@ -50,12 +50,13 @@ data class Movimiento(
     val ip: String = "--"
 )
 
-// ✅ SERVICIO QUE SE QUEDA FUNCIONANDO SIEMPRE
+// ✅ SERVICIO QUE SE QUEDA ACTIVO (SIN DECLARACIÓN DE TIPO QUE FALLE)
 class ServicioMonedero : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         crearCanalServicio()
+        // ✅ NO DECLARAMOS EL TIPO EXPLÍCITAMENTE, ASÍ NO FALLA
         val notificacion = NotificationCompat.Builder(this, CANAL_SERVICIO)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("Monedero Smart activo")
