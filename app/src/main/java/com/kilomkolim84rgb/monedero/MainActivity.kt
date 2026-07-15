@@ -1,11 +1,15 @@
 package com.kilomkolim84rgb.monedero
 
 import android.app.AlertDialog
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,12 +23,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import android.Manifest
+import android.content.pm.PackageManager
 import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
 
-// ✅ TU CLAVE DE SEGURIDAD
-const val CLAVE_VACIADO = "123456"
+// ✅ TU CLAVE Y CANAL DE NOTIFICACIONES
+const val CLAVE_VACIADO = "222777"
+const val CANAL_NOTIFICACIONES = "canal_monedero"
 
 data class Movimiento(
     val fechaHora: String = "",
@@ -41,22 +51,77 @@ class MainActivity : ComponentActivity() {
     private var tts: TextToSpeech? = null
     private var vozLista = false
 
+    // Permiso de notificaciones
+    private val permisoNotificaciones = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         tts = TextToSpeech(this) { estado ->
             vozLista = estado == TextToSpeech.SUCCESS
             if(vozLista) tts?.language = Locale("es", "PE")
         }
+
+        // ✅ CREAR CANAL Y PEDIR PERMISO AL INICIO
+        crearCanalNotificaciones()
+        pedirPermisoNotificaciones()
+
         setContent { PantallaPrincipal() }
         escucharDatos()
         cargarHistorialGuardado()
+    }
+
+    // ✅ FUNCIÓN: CANAL OBLIGATORIO PARA ANDROID
+    private fun crearCanalNotificaciones() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val canal = NotificationChannel(
+                CANAL_NOTIFICACIONES,
+                "Monedero Smart",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Avisos de ingresos y movimientos"
+            }
+            val gestor = getSystemService(NotificationManager::class.java)
+            gestor.createNotificationChannel(canal)
+        }
+    }
+
+    // ✅ PEDIR PERMISO AL USUARIO
+    private fun pedirPermisoNotificaciones() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                permisoNotificaciones.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
+    // ✅ FUNCIÓN: MOSTRAR NOTIFICACIÓN
+    private fun mostrarNotificacion(monto: Int, total: Int) {
+        val textoMonto = when(monto) {
+            1 -> "un sol"
+            2 -> "dos soles"
+            3 -> "tres soles"
+            4 -> "cuatro soles"
+            5 -> "cinco soles"
+            else -> "$monto soles"
+        }
+
+        val notificacion = NotificationCompat.Builder(this, CANAL_NOTIFICACIONES)
+            .setSmallIcon(android.R.drawable.ic_menu_info_details)
+            .setContentTitle("✅ INGRESO REGISTRADO")
+            .setContentText("Entró $textoMonto | Total: $total soles")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            NotificationManagerCompat.from(this).notify(1001, notificacion)
+        }
     }
 
     private fun hablar(texto: String) {
         if(vozLista) tts?.speak(texto, TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
-    // ✅ FUNCIÓN NUEVA: DICE SOLO EL MONTO COMO PEDISTE
     private fun hablarMonto(monto: Int) {
         val texto = when(monto) {
             1 -> "un sol"
@@ -69,13 +134,6 @@ class MainActivity : ComponentActivity() {
             8 -> "ocho soles"
             9 -> "nueve soles"
             10 -> "diez soles"
-            11 -> "once soles"
-            12 -> "doce soles"
-            13 -> "trece soles"
-            14 -> "catorce soles"
-            15 -> "quince soles"
-            20 -> "veinte soles"
-            50 -> "cincuenta soles"
             else -> "$monto soles"
         }
         hablar(texto)
@@ -122,8 +180,10 @@ class MainActivity : ComponentActivity() {
                     historial = listOf(nuevoMov) + historial
                     db.child("historial").push().setValue(nuevoMov)
                     db.child("ultimo_movimiento").setValue("Ingreso: $cuantoEntro soles")
-                    // ✅ AHORA SOLO DICE EL MONTO, SIN FRASES EXTRA
+                    
+                    // ✅ SE ACTIVA VOZ Y NOTIFICACIÓN AL MISMO TIEMPO
                     hablarMonto(cuantoEntro)
+                    mostrarNotificacion(cuantoEntro, nuevoTotal)
                 }
                 totalAnterior = nuevoTotal
                 totalGeneral = nuevoTotal
