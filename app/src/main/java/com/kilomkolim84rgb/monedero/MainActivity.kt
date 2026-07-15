@@ -6,7 +6,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
-import android.os.Build
+import android.os.Bundle // ✅ AGREGADO: FALTABA ESTE IMPORT
 import android.os.IBinder
 import android.speech.tts.TextToSpeech
 import android.widget.Toast
@@ -89,7 +89,7 @@ class MainActivity : ComponentActivity() {
 
     private val permisoNotificaciones = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) { // ✅ YA RECONOCE BUNDLE
         super.onCreate(savedInstanceState)
         tts = TextToSpeech(this) { estado ->
             vozLista = estado == TextToSpeech.SUCCESS
@@ -204,7 +204,7 @@ class MainActivity : ComponentActivity() {
                     db.child("ultimo_movimiento").setValue("Ingreso: $cuantoEntro soles")
                     
                     hablarMonto(cuantoEntro)
-                    mostrarNotificacion(cuantoEntro, nuevoTotal) // ✅ SE ACTIVA SIEMPRE
+                    mostrarNotificacion(cuantoEntro, nuevoTotal)
                 }
                 totalAnterior = nuevoTotal
                 totalGeneral = nuevoTotal
@@ -246,10 +246,21 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun PantallaPrincipal() {
         Scaffold(modifier = Modifier.fillMaxSize(), containerColor = Color.White) { padding ->
-            Column(modifier = Modifier.fillMaxSize().padding(padding).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, // ✅ CORREGIDO: Alignment correcto
+                verticalArrangement = Arrangement.Top // ✅ CORREGIDO: Arrangement separado
+            ) {
                 Text("MONEDERO SMART", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp))
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly, // ✅ CORREGIDO
+                    verticalAlignment = Alignment.CenterVertically // ✅ CORREGIDO
+                ) {
                     BotonDato("TEMP", temperatura)
                     BotonDato("VOLT", voltaje)
                     BotonDato("RAYOS", distanciaRayos)
@@ -262,7 +273,10 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(16.dp))
                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFFCDFF33))) {
-                    Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally // ✅ CORREGIDO
+                    ) {
                         Text("TOTAL", fontSize = 14.sp)
                         Text("$totalGeneral SOLES", fontSize = 36.sp, fontWeight = FontWeight.Bold)
                         Text("Último: $ultimoMovimiento", fontSize = 12.sp, color = Color.DarkGray)
@@ -276,20 +290,32 @@ class MainActivity : ComponentActivity() {
                 Column(modifier = Modifier.fillMaxWidth().weight(1f).background(Color(0xFFE0F7FF), RoundedCornerShape(12.dp)).padding(8.dp)) {
                     LazyColumn {
                         items(historial) { mov ->
-                            Card(modifier = Modifier.fillMaxWidth().padding(3.dp)) {
-                                Row(modifier = Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween, // ✅ CORREGIDO
+                                    verticalAlignment = Alignment.CenterVertically // ✅ CORREGIDO
+                                ) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(mov.fechaHora, fontSize = 11.sp, color = Color.Gray)
                                         if(mov.detalle == "Monedero vaciado") Text("⚠️ Vaciado", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Red)
                                         else Text("+${mov.montoIngresado} | Total: ${mov.totalAcumulado}", fontSize = 12.sp)
                                     }
-                                    Row {
-                                        Card(modifier = Modifier.size(45.dp), shape = RoundedCornerShape(6.dp)) { Box(Alignment.Center) { Text("📷") } }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Card(modifier = Modifier.size(45.dp), shape = RoundedCornerShape(6.dp)) {
+                                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                                Text("📷", fontSize = 18.sp)
+                                            }
+                                        }
                                         Column(modifier = Modifier.width(100.dp)) {
                                             Text("MAC: ${mov.mac}", fontSize = 10.sp, color = Color.Gray)
                                             Text("IP: ${mov.ip}", fontSize = 10.sp, color = Color.Gray)
                                         }
-                                        Card(modifier = Modifier.size(45.dp), shape = RoundedCornerShape(6.dp)) { Box(Alignment.Center) { Text("QR", fontSize = 10.sp) } }
+                                        Card(modifier = Modifier.size(45.dp), shape = RoundedCornerShape(6.dp)) {
+                                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                                Text("QR", fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -318,7 +344,11 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun BotonDato(etiqueta: String, valor: String) {
         Card(modifier = Modifier.size(90.dp, 50.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEB3B))) {
-            Column(Modifier.fillMaxSize(), Alignment.CenterHorizontally, Alignment.CenterVertically) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally, // ✅ CORREGIDO
+                verticalArrangement = Arrangement.Center // ✅ CORREGIDO
+            ) {
                 Text(etiqueta, fontSize = 9.sp, fontWeight = FontWeight.Medium)
                 Text(valor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
