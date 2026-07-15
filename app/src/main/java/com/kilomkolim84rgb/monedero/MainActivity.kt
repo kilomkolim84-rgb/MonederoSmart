@@ -180,6 +180,16 @@ class MainActivity : ComponentActivity() {
 
     private fun escucharDatos() {
         db.keepSynced(true)
+        
+        // ✅ CARGA EL TOTAL GUARDADO AL ABRIR LA APP PARA NO DUPLICAR NOTIFICACIONES
+        db.child("total_general").addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                totalAnterior = snapshot.getValue(Int::class.java) ?: 0
+                totalGeneral = totalAnterior
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        })
+
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val nuevoTotal = snapshot.getValue(Int::class.java) ?: 0
