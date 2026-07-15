@@ -119,10 +119,10 @@ class MainActivity : ComponentActivity() {
             .setContentText("Entró $textoMonto | Total: $total soles")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .setContentIntent(pendingIntent) // ✅ ABRE LA APP AL TOCAR
+            .setContentIntent(pendingIntent)
             .build()
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICACIONES) == PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
             NotificationManagerCompat.from(this).notify(1001, aviso)
         }
     }
