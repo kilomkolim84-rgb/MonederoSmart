@@ -8,7 +8,10 @@
         android:allowBackup="true"
         android:label="MonederoSmart"
         android:supportsRtl="true">
+        android:persistent="true"
+        android:foregroundServiceType="dataSync"
         <activity
+            
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
