@@ -29,6 +29,11 @@
             android:name=".ServicioMonedero"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <service
+            android:name=".EscuchaFirebaseService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
+        
 
     </application>
 
