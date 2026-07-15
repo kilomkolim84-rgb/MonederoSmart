@@ -1,17 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    
+
+    <!-- PERMISOS OBLIGATORIOS -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" /> <!-- ✅ FALTABA: MANTIENE LA APP ACTIVA -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" /> <!-- ✅ FALTABA: PERMITE EL SERVICIO -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:allowBackup="true"
         android:label="MonederoSmart"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
         android:persistent="true"
-        android:foregroundServiceType="dataSync"
+        android:foregroundServiceType="dataSync">
+
         <activity
-            
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
@@ -19,5 +23,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- ✅ FALTABA: DECLARAR EL SERVICIO QUE SE QUEDA ACTIVO -->
+        <service
+            android:name=".ServicioMonedero"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
     </application>
+
 </manifest>
