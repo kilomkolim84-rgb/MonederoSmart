@@ -394,6 +394,31 @@ Spacer(modifier = Modifier.height(6.dp))
         hablar("Monedero vaciado")
         Toast.makeText(this, "✅ Vaciado correctamente", Toast.LENGTH_SHORT).show()
     }
+// ✅ FUNCIÓN PARA BOTÓN LIMPIAR HISTORIAL
+private fun limpiarSoloHistorial() {
+    db.child("historial").removeValue()
+    historial = emptyList()
+    Toast.makeText(this, "✅ Historial limpiado", Toast.LENGTH_SHORT).show()
+}
+
+// ✅ FUNCIÓN PEDIR CLAVE CON OJO
+private fun pedirClave() {
+    val campoClave = EditText(this)
+    campoClave.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+    campoClave.hint = "******"
+
+    AlertDialog.Builder(this)
+        .setTitle("CLAVE DE SEGURIDAD")
+        .setMessage("Escribe tu clave de 6 dígitos:")
+        .setView(campoClave)
+        .setPositiveButton("CONFIRMAR") { _, _ ->
+            val clave = campoClave.text.toString()
+            if(clave == CLAVE_VACIADO) vaciar()
+            else Toast.makeText(this, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
+        }
+        .setNegativeButton("CANCELAR", null)
+        .show()
+}
 
     override fun onDestroy() {
         super.onDestroy()
