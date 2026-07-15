@@ -56,6 +56,31 @@ class MainActivity : ComponentActivity() {
         if(vozLista) tts?.speak(texto, TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
+    // ✅ FUNCIÓN NUEVA: DICE SOLO EL MONTO COMO PEDISTE
+    private fun hablarMonto(monto: Int) {
+        val texto = when(monto) {
+            1 -> "un sol"
+            2 -> "dos soles"
+            3 -> "tres soles"
+            4 -> "cuatro soles"
+            5 -> "cinco soles"
+            6 -> "seis soles"
+            7 -> "siete soles"
+            8 -> "ocho soles"
+            9 -> "nueve soles"
+            10 -> "diez soles"
+            11 -> "once soles"
+            12 -> "doce soles"
+            13 -> "trece soles"
+            14 -> "catorce soles"
+            15 -> "quince soles"
+            20 -> "veinte soles"
+            50 -> "cincuenta soles"
+            else -> "$monto soles"
+        }
+        hablar(texto)
+    }
+
     private var totalGeneral by mutableStateOf(0)
     private var ultimoMovimiento by mutableStateOf("-")
     private var historial by mutableStateOf(listOf<Movimiento>())
@@ -97,7 +122,8 @@ class MainActivity : ComponentActivity() {
                     historial = listOf(nuevoMov) + historial
                     db.child("historial").push().setValue(nuevoMov)
                     db.child("ultimo_movimiento").setValue("Ingreso: $cuantoEntro soles")
-                    hablar("Ingreso $cuantoEntro soles. Total $nuevoTotal soles")
+                    // ✅ AHORA SOLO DICE EL MONTO, SIN FRASES EXTRA
+                    hablarMonto(cuantoEntro)
                 }
                 totalAnterior = nuevoTotal
                 totalGeneral = nuevoTotal
@@ -275,8 +301,8 @@ class MainActivity : ComponentActivity() {
         ) {
             Column(
                 modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally, // ✅ CENTRADO HORIZONTAL
-                verticalArrangement = Arrangement.Center // ✅ CENTRADO VERTICAL
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
                 Text(etiqueta, fontSize = 9.sp, fontWeight = FontWeight.Medium, color = Color.Black)
                 Text(valor, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black)
