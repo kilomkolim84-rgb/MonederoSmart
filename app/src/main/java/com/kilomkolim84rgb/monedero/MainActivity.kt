@@ -50,13 +50,13 @@ data class Movimiento(
     val ip: String = "--"
 )
 
-// ✅ SERVICIO QUE SE QUEDA ACTIVO (SIN DECLARACIÓN DE TIPO QUE FALLE)
+// ✅ SERVICIO SIN NINGUNA REFERENCIA FALLIDA
 class ServicioMonedero : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         crearCanalServicio()
-        // ✅ NO DECLARAMOS EL TIPO EXPLÍCITAMENTE, ASÍ NO FALLA
+        // ✅ SIN TIPO EXPLÍCITO, KOTLIN LO DETECTA SOLO
         val notificacion = NotificationCompat.Builder(this, CANAL_SERVICIO)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("Monedero Smart activo")
