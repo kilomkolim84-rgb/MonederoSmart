@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
+import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -90,7 +91,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ✅ AQUÍ ESTABA EL ERROR: LO DEJAMOS COMO DEBE SER, SIN DECLARACIONES QUE FALLEN
     private fun mostrarNotificacion(monto: Int, total: Int) {
         val textoMonto = when(monto) {
             1 -> "un sol"
@@ -271,24 +271,23 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(
-    modifier = Modifier.fillMaxWidth(),
-    horizontalArrangement = Arrangement.SpaceBetween,
-    verticalAlignment = Alignment.CenterVertically
-) {
-    Text("Historial", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.Black)
-    
-    // ✅ BOTÓN LIMPIAR HISTORIAL
-    Button(
-        onClick = { limpiarSoloHistorial() },
-        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
-        shape = RoundedCornerShape(8.dp),
-        modifier = Modifier.height(30.dp)
-    ) {
-        Text("LIMPIAR", fontSize = 10.sp)
-    }
-}
-Spacer(modifier = Modifier.height(6.dp))
-
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Historial", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.Black)
+                    
+                    // ✅ BOTÓN LIMPIAR HISTORIAL
+                    Button(
+                        onClick = { limpiarSoloHistorial() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.height(30.dp)
+                    ) {
+                        Text("LIMPIAR", fontSize = 10.sp)
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Column(
                     modifier = Modifier
@@ -349,22 +348,6 @@ Spacer(modifier = Modifier.height(6.dp))
         }
     }
 
-    private fun pedirClave() {
-        val entrada = android.widget.EditText(this)
-        entrada.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
-        AlertDialog.Builder(this)
-            .setTitle("CLAVE DE SEGURIDAD")
-            .setMessage("Escribe tu clave de 6 dígitos:")
-            .setView(entrada)
-            .setPositiveButton("CONFIRMAR") { _, _ ->
-                val clave = entrada.text.toString()
-                if(clave == CLAVE_VACIADO) vaciar()
-                else Toast.makeText(this, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton("CANCELAR", null)
-            .show()
-    }
-
     @Composable
     fun BotonDato(etiqueta: String, valor: String) {
         Card(
@@ -383,6 +366,24 @@ Spacer(modifier = Modifier.height(6.dp))
         }
     }
 
+    private fun pedirClave() {
+        val campoClave = EditText(this)
+        campoClave.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        campoClave.hint = "******"
+
+        AlertDialog.Builder(this)
+            .setTitle("CLAVE DE SEGURIDAD")
+            .setMessage("Escribe tu clave de 6 dígitos:")
+            .setView(campoClave)
+            .setPositiveButton("CONFIRMAR") { _, _ ->
+                val clave = campoClave.text.toString()
+                if(clave == CLAVE_VACIADO) vaciar()
+                else Toast.makeText(this, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("CANCELAR", null)
+            .show()
+    }
+
     private fun vaciar() {
         val fecha = formatoFecha.format(Date())
         val reg = Movimiento(fecha, "Monedero vaciado", 0, 0)
@@ -394,31 +395,12 @@ Spacer(modifier = Modifier.height(6.dp))
         hablar("Monedero vaciado")
         Toast.makeText(this, "✅ Vaciado correctamente", Toast.LENGTH_SHORT).show()
     }
-// ✅ FUNCIÓN PARA BOTÓN LIMPIAR HISTORIAL
-private fun limpiarSoloHistorial() {
-    db.child("historial").removeValue()
-    historial = emptyList()
-    Toast.makeText(this, "✅ Historial limpiado", Toast.LENGTH_SHORT).show()
-}
 
-// ✅ FUNCIÓN PEDIR CLAVE CON OJO
-private fun pedirClave() {
-    val campoClave = EditText(this)
-    campoClave.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
-    campoClave.hint = "******"
-
-    AlertDialog.Builder(this)
-        .setTitle("CLAVE DE SEGURIDAD")
-        .setMessage("Escribe tu clave de 6 dígitos:")
-        .setView(campoClave)
-        .setPositiveButton("CONFIRMAR") { _, _ ->
-            val clave = campoClave.text.toString()
-            if(clave == CLAVE_VACIADO) vaciar()
-            else Toast.makeText(this, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
-        }
-        .setNegativeButton("CANCELAR", null)
-        .show()
-}
+    private fun limpiarSoloHistorial() {
+        db.child("historial").removeValue()
+        historial = emptyList()
+        Toast.makeText(this, "✅ Historial limpiado", Toast.LENGTH_SHORT).show()
+    }
 
     override fun onDestroy() {
         super.onDestroy()
