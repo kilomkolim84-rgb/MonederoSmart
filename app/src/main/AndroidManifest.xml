@@ -4,13 +4,15 @@
     <!-- PERMISOS OBLIGATORIOS -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" /> <!-- ✅ FALTABA: MANTIENE LA APP ACTIVA -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" /> <!-- ✅ FALTABA: PERMITE EL SERVICIO -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:allowBackup="true"
         android:label="MonederoSmart"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:persistent="true"
         android:foregroundServiceType="dataSync">
@@ -24,7 +26,6 @@
             </intent-filter>
         </activity>
 
-        <!-- ✅ FALTABA: DECLARAR EL SERVICIO QUE SE QUEDA ACTIVO -->
         <service
             android:name=".ServicioMonedero"
             android:exported="false"
@@ -33,7 +34,6 @@
             android:name=".EscuchaFirebaseService"
             android:foregroundServiceType="dataSync"
             android:exported="false" />
-        
 
     </application>
 
