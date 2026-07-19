@@ -36,18 +36,17 @@ import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
 
-// ✅ TUS DATOS ORIGINALES SIN CAMBIOS
 const val CLAVE_VACIADO = "222777"
 const val CANAL_NOTIFICACIONES = "canal_monedero"
 
 data class Movimiento(
     val fechaHora: String = "",
     val detalle: String = "",
-    val montoIngresado: Int = 0,
-    val totalAcumulado: Int = 0,
+    val montoIngresado: Double = 0.0,  // ✅ AHORA ES DECIMAL PARA CÉNTIMOS
+    val totalAcumulado: Double = 0.0,
     val mac: String = "--",
     val ip: String = "--",
-    val alias: String = "" // 🆕 Campo nuevo para el nombre
+    val alias: String = ""
 )
 
 class MainActivity : ComponentActivity() {
@@ -66,10 +65,8 @@ class MainActivity : ComponentActivity() {
         }
 
         crearCanalNotificaciones()
-        
         pedirPermisoNotificaciones()
-        startForegroundService(Intent(this, 
-        EscuchaFirebaseService::class.java))
+        startForegroundService(Intent(this, EscuchaFirebaseService::class.java))
         
         setContent { PantallaPrincipal() }
         escucharDatos()
@@ -98,14 +95,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun mostrarNotificacion(monto: Int, total: Int) {
+    private fun mostrarNotificacion(monto: Double, total: Double) {
         val textoMonto = when(monto) {
-            1 -> "un sol"
-            2 -> "dos soles"
-            3 -> "tres soles"
-            4 -> "cuatro soles"
-            5 -> "cinco soles"
-            else -> "$monto soles"
+            0.10 -> "diez céntimos"
+            0.20 -> "veinte céntimos"
+            0.50 -> "cincuenta céntimos"
+            1.00 -> "un sol"
+            2.00 -> "dos soles"
+            5.00 -> "cinco soles"
+            else -> String.format("%.2f soles", monto)
         }
 
         val intent = Intent(this, MainActivity::class.java)
@@ -120,7 +118,7 @@ class MainActivity : ComponentActivity() {
         val aviso = NotificationCompat.Builder(this, CANAL_NOTIFICACIONES)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("✅ INGRESO REGISTRADO")
-            .setContentText("Entró $textoMonto | Total: $total soles")
+            .setContentText("Entró $textoMonto | Total: ${String.format("%.2f", total)} soles")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
@@ -135,30 +133,26 @@ class MainActivity : ComponentActivity() {
         if(vozLista) tts?.speak(texto, TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
-    private fun hablarMonto(monto: Int) {
+    private fun hablarMonto(monto: Double) {
         val texto = when(monto) {
-            1 -> "un sol"
-            2 -> "dos soles"
-            3 -> "tres soles"
-            4 -> "cuatro soles"
-            5 -> "cinco soles"
-            6 -> "seis soles"
-            7 -> "siete soles"
-            8 -> "ocho soles"
-            9 -> "nueve soles"
-            10 -> "diez soles"
-            else -> "$monto soles"
+            0.10 -> "diez céntimos"
+            0.20 -> "veinte céntimos"
+            0.50 -> "cincuenta céntimos"
+            1.00 -> "un sol"
+            2.00 -> "dos soles"
+            5.00 -> "cinco soles"
+            else -> String.format("%.2f soles", monto)
         }
         hablar(texto)
     }
 
-    private var totalGeneral by mutableStateOf(0)
+    private var totalGeneral by mutableStateOf(0.0)
     private var ultimoMovimiento by mutableStateOf("-")
     private var historial by mutableStateOf(listOf<Movimiento>())
     private var temperatura by mutableStateOf("-- °C")
     private var voltaje by mutableStateOf("-- V")
     private var distanciaRayos by mutableStateOf("-- km")
-    private var totalAnterior = 0
+    private var totalAnterior = 0.0
 
     private fun cargarHistorialGuardado() {
         db.child("historial").addListenerForSingleValueEvent(object : ValueEventListener {
@@ -169,11 +163,11 @@ class MainActivity : ComponentActivity() {
                         Movimiento(
                             fechaHora = item.child("fechaHora").getValue(String::class.java) ?: "",
                             detalle = item.child("detalle").getValue(String::class.java) ?: "",
-                            montoIngresado = item.child("montoIngresado").getValue(Int::class.java) ?: 0,
-                            totalAcumulado = item.child("totalAcumulado").getValue(Int::class.java) ?: 0,
+                            montoIngresado = item.child("montoIngresado").getValue(Double::class.java) ?: 0.0,
+                            totalAcumulado = item.child("totalAcumulado").getValue(Double::class.java) ?: 0.0,
                             mac = item.child("mac").getValue(String::class.java) ?: "--",
                             ip = item.child("ip").getValue(String::class.java) ?: "--",
-                            alias = item.child("alias").getValue(String::class.java) ?: "" // 🆕 Carga el alias guardado
+                            alias = item.child("alias").getValue(String::class.java) ?: ""
                         )
                     )
                 }
@@ -188,7 +182,7 @@ class MainActivity : ComponentActivity() {
         
         db.child("total_general").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                totalAnterior = snapshot.getValue(Int::class.java) ?: 0
+                totalAnterior = snapshot.getValue(Double::class.java) ?: 0.0
                 totalGeneral = totalAnterior
             }
             override fun onCancelled(e: DatabaseError) {}
@@ -196,14 +190,14 @@ class MainActivity : ComponentActivity() {
 
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val nuevoTotal = snapshot.getValue(Int::class.java) ?: 0
+                val nuevoTotal = snapshot.getValue(Double::class.java) ?: 0.0
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
                     val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal, alias = "")
                     historial = listOf(nuevoMov) + historial
                     db.child("historial").push().setValue(nuevoMov)
-                    db.child("ultimo_movimiento").setValue("Ingreso: $cuantoEntro soles")
+                    db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
                     
                     hablarMonto(cuantoEntro)
                     mostrarNotificacion(cuantoEntro, nuevoTotal)
@@ -248,15 +242,19 @@ class MainActivity : ComponentActivity() {
         })
     }
 
-    // ✅ REINICIAR SENSORES — INTACTO
+    // ✅ REINICIO VERDADERO: BORRA DE FIREBASE
     private fun reiniciarSensores() {
         temperatura = "-- °C"
         voltaje = "-- V"
         distanciaRayos = "-- km"
+        
+        db.child("sensores/temperatura").removeValue()
+        db.child("sensores/voltaje").removeValue()
+        db.child("sensores/rayos_distancia").removeValue()
+        
         Toast.makeText(this, "✅ Sensores reiniciados", Toast.LENGTH_SHORT).show()
     }
 
-    // 🆕 FUNCIÓN PARA PONER/CAMBIAR ALIAS
     private fun ponerAlias(posicion: Int, claveFirebase: String) {
         val campoAlias = EditText(this)
         campoAlias.hint = "Escribe el nombre o alias"
@@ -268,17 +266,29 @@ class MainActivity : ComponentActivity() {
             .setPositiveButton("GUARDAR") { _, _ ->
                 val nombre = campoAlias.text.toString().trim()
                 if(nombre.isNotEmpty()) {
-                    // Actualiza en la lista local
                     historial = historial.toMutableList().also {
                         it[posicion] = it[posicion].copy(alias = nombre)
                     }
-                    // Guarda en Firebase
                     db.child("historial").child(claveFirebase).child("alias").setValue(nombre)
                     Toast.makeText(this, "✅ Alias guardado: $nombre", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("CANCELAR", null)
             .show()
+    }
+
+    // ✅ FORMATEA EL MONTO PARA MOSTRAR
+    private fun formatearMonto(monto: Double): String {
+        return when {
+            monto == 0.10 -> "+0.10 céntimos"
+            monto == 0.20 -> "+0.20 céntimos"
+            monto == 0.50 -> "+0.50 céntimos"
+            monto == 1.00 -> "+1 sol"
+            monto == 2.00 -> "+2 soles"
+            monto == 5.00 -> "+5 soles"
+            monto < 1.00 -> String.format("+%.2f céntimos", monto)
+            else -> String.format("+%.0f soles", monto)
+        }
     }
 
     @Composable
@@ -305,7 +315,6 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // ✅ BOTÓN REINICIAR SENSORES — INTACTO
                 Button(
                     onClick = { reiniciarSensores() },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
@@ -335,7 +344,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("TOTAL", fontSize = 14.sp, color = Color.Black)
-                        Text("$totalGeneral SOLES", fontSize = 36.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                        Text(String.format("%.2f SOLES", totalGeneral), fontSize = 36.sp, fontWeight = FontWeight.Bold, color = Color.Black)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("Último: $ultimoMovimiento", fontSize = 12.sp, color = Color.DarkGray)
                     }
@@ -370,11 +379,10 @@ class MainActivity : ComponentActivity() {
                     LazyColumn(modifier = Modifier.fillMaxWidth()) {
                         items(historial.size) { posicion ->
                             val mov = historial[posicion]
-                            // 🆕 Determina qué mostrar como alias
                             val textoAlias = if(mov.alias.isNotEmpty()) mov.alias else "DESCONOCIDO"
                             val colorAlias = if(mov.alias.isNotEmpty()) Color(0xFF1976D2) else Color(0xFFFF9800)
-                            // 🆕 Clave de Firebase para guardar el alias
                             val claveFirebase = mov.fechaHora.replace("/","-").replace(":","-").replace(" ","_")
+                            val textoMonto = formatearMonto(mov.montoIngresado)
 
                             Card(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
@@ -386,7 +394,6 @@ class MainActivity : ComponentActivity() {
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // 🆕 FOTO + ALIAS CLICKEABLE
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier.weight(1f)
@@ -411,7 +418,7 @@ class MainActivity : ComponentActivity() {
                                             if(mov.detalle == "Monedero vaciado"){
                                                 Text("⚠️ Vaciado", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Red)
                                             } else {
-                                                Text("+${mov.montoIngresado} | Total: ${mov.totalAcumulado}", fontSize = 12.sp, color = Color.Black)
+                                                Text(textoMonto, fontSize = 12.sp, color = Color.Black)
                                             }
                                         }
                                     }
@@ -478,12 +485,12 @@ class MainActivity : ComponentActivity() {
 
     private fun vaciar() {
         val fecha = formatoFecha.format(Date())
-        val reg = Movimiento(fecha, "Monedero vaciado", 0, 0)
+        val reg = Movimiento(fecha, "Monedero vaciado", 0.0, 0.0)
         historial = listOf(reg) + historial
         db.child("historial").push().setValue(reg)
-        db.child("total_general").setValue(0)
+        db.child("total_general").setValue(0.0)
         db.child("ultimo_movimiento").setValue("Monedero vaciado")
-        totalAnterior = 0
+        totalAnterior = 0.0
         hablar("Monedero vaciado")
         Toast.makeText(this, "✅ Vaciado correctamente", Toast.LENGTH_SHORT).show()
     }
@@ -501,10 +508,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// ✅ SERVICIO QUE MANTIENE LA APP DESPIERTA AUNQUE LA CIERRES
 class EscuchaFirebaseService : android.app.Service() {
     private val db = FirebaseDatabase.getInstance().reference
-    private var totalAnterior = 0
+    private var totalAnterior = 0.0
     private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
     private var tts: TextToSpeech? = null
     private var vozLista = false
@@ -530,40 +536,42 @@ class EscuchaFirebaseService : android.app.Service() {
 
         db.child("total_general").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                totalAnterior = snapshot.getValue(Int::class.java) ?: 0
+                totalAnterior = snapshot.getValue(Double::class.java) ?: 0.0
             }
             override fun onCancelled(e: DatabaseError) {}
         })
 
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val nuevoTotal = snapshot.getValue(Int::class.java) ?: 0
+                val nuevoTotal = snapshot.getValue(Double::class.java) ?: 0.0
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
                     val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal)
                     db.child("historial").push().setValue(nuevoMov)
-                    db.child("ultimo_movimiento").setValue("Ingreso: $cuantoEntro soles")
+                    db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
                     
                     if(vozLista){
                         val texto = when(cuantoEntro){
-                            1 -> "un sol"
-                            2 -> "dos soles"
-                            3 -> "tres soles"
-                            4 -> "cuatro soles"
-                            5 -> "cinco soles"
-                            else -> "$cuantoEntro soles"
+                            0.10 -> "diez céntimos"
+                            0.20 -> "veinte céntimos"
+                            0.50 -> "cincuenta céntimos"
+                            1.00 -> "un sol"
+                            2.00 -> "dos soles"
+                            5.00 -> "cinco soles"
+                            else -> String.format("%.2f soles", cuantoEntro)
                         }
                         tts?.speak(texto, TextToSpeech.QUEUE_FLUSH, null, null)
                     }
                     
                     val textoMonto = when(cuantoEntro) {
-                        1 -> "un sol"
-                        2 -> "dos soles"
-                        3 -> "tres soles"
-                        4 -> "cuatro soles"
-                        5 -> "cinco soles"
-                        else -> "$cuantoEntro soles"
+                        0.10 -> "diez céntimos"
+                        0.20 -> "veinte céntimos"
+                        0.50 -> "cincuenta céntimos"
+                        1.00 -> "un sol"
+                        2.00 -> "dos soles"
+                        5.00 -> "cinco soles"
+                        else -> String.format("%.2f soles", cuantoEntro)
                     }
                     
                     val intent = Intent(this@EscuchaFirebaseService, MainActivity::class.java)
@@ -578,7 +586,7 @@ class EscuchaFirebaseService : android.app.Service() {
                     val aviso = NotificationCompat.Builder(this@EscuchaFirebaseService, CANAL_NOTIFICACIONES)
                         .setSmallIcon(android.R.drawable.ic_menu_info_details)
                         .setContentTitle("✅ INGRESO REGISTRADO")
-                        .setContentText("Entró $textoMonto | Total: $nuevoTotal soles")
+                        .setContentText("Entró $textoMonto | Total: ${String.format("%.2f", nuevoTotal)} soles")
                         .setPriority(NotificationCompat.PRIORITY_HIGH)
                         .setAutoCancel(true)
                         .setContentIntent(pendingIntent)
