@@ -14,6 +14,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -45,7 +46,8 @@ data class Movimiento(
     val montoIngresado: Int = 0,
     val totalAcumulado: Int = 0,
     val mac: String = "--",
-    val ip: String = "--"
+    val ip: String = "--",
+    val alias: String = "" // 🆕 Campo nuevo para el nombre
 )
 
 class MainActivity : ComponentActivity() {
@@ -170,7 +172,8 @@ class MainActivity : ComponentActivity() {
                             montoIngresado = item.child("montoIngresado").getValue(Int::class.java) ?: 0,
                             totalAcumulado = item.child("totalAcumulado").getValue(Int::class.java) ?: 0,
                             mac = item.child("mac").getValue(String::class.java) ?: "--",
-                            ip = item.child("ip").getValue(String::class.java) ?: "--"
+                            ip = item.child("ip").getValue(String::class.java) ?: "--",
+                            alias = item.child("alias").getValue(String::class.java) ?: "" // 🆕 Carga el alias guardado
                         )
                     )
                 }
@@ -197,7 +200,7 @@ class MainActivity : ComponentActivity() {
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
-                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal)
+                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal, alias = "")
                     historial = listOf(nuevoMov) + historial
                     db.child("historial").push().setValue(nuevoMov)
                     db.child("ultimo_movimiento").setValue("Ingreso: $cuantoEntro soles")
@@ -245,12 +248,37 @@ class MainActivity : ComponentActivity() {
         })
     }
 
-    // ✅ FUNCIÓN NUEVA: REINICIAR SENSORES
+    // ✅ REINICIAR SENSORES — INTACTO
     private fun reiniciarSensores() {
         temperatura = "-- °C"
         voltaje = "-- V"
         distanciaRayos = "-- km"
         Toast.makeText(this, "✅ Sensores reiniciados", Toast.LENGTH_SHORT).show()
+    }
+
+    // 🆕 FUNCIÓN PARA PONER/CAMBIAR ALIAS
+    private fun ponerAlias(posicion: Int, claveFirebase: String) {
+        val campoAlias = EditText(this)
+        campoAlias.hint = "Escribe el nombre o alias"
+        
+        AlertDialog.Builder(this)
+            .setTitle("PONER ALIAS")
+            .setMessage("Escribe el nombre de la persona:")
+            .setView(campoAlias)
+            .setPositiveButton("GUARDAR") { _, _ ->
+                val nombre = campoAlias.text.toString().trim()
+                if(nombre.isNotEmpty()) {
+                    // Actualiza en la lista local
+                    historial = historial.toMutableList().also {
+                        it[posicion] = it[posicion].copy(alias = nombre)
+                    }
+                    // Guarda en Firebase
+                    db.child("historial").child(claveFirebase).child("alias").setValue(nombre)
+                    Toast.makeText(this, "✅ Alias guardado: $nombre", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("CANCELAR", null)
+            .show()
     }
 
     @Composable
@@ -277,7 +305,7 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // ✅ BOTÓN NUEVO: REINICIAR SENSORES
+                // ✅ BOTÓN REINICIAR SENSORES — INTACTO
                 Button(
                     onClick = { reiniciarSensores() },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
@@ -340,7 +368,14 @@ class MainActivity : ComponentActivity() {
                         .padding(8.dp)
                 ) {
                     LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                        items(historial) { mov ->
+                        items(historial.size) { posicion ->
+                            val mov = historial[posicion]
+                            // 🆕 Determina qué mostrar como alias
+                            val textoAlias = if(mov.alias.isNotEmpty()) mov.alias else "DESCONOCIDO"
+                            val colorAlias = if(mov.alias.isNotEmpty()) Color(0xFF1976D2) else Color(0xFFFF9800)
+                            // 🆕 Clave de Firebase para guardar el alias
+                            val claveFirebase = mov.fechaHora.replace("/","-").replace(":","-").replace(" ","_")
+
                             Card(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
                                 shape = RoundedCornerShape(8.dp),
@@ -351,17 +386,10 @@ class MainActivity : ComponentActivity() {
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(mov.fechaHora, fontSize = 11.sp, color = Color.Gray)
-                                        if(mov.detalle == "Monedero vaciado"){
-                                            Text("⚠️ Vaciado", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Red)
-                                        } else {
-                                            Text("+${mov.montoIngresado} | Total: ${mov.totalAcumulado}", fontSize = 12.sp, color = Color.Black)
-                                        }
-                                    }
+                                    // 🆕 FOTO + ALIAS CLICKEABLE
                                     Row(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
                                     ) {
                                         Card(
                                             modifier = Modifier.size(45.dp, 45.dp),
@@ -370,6 +398,27 @@ class MainActivity : ComponentActivity() {
                                         ) {
                                             Box(contentAlignment = Alignment.Center) { Text("📷", fontSize = 18.sp) }
                                         }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(
+                                                textoAlias,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = colorAlias,
+                                                modifier = Modifier.clickable { ponerAlias(posicion, claveFirebase) }
+                                            )
+                                            Text(mov.fechaHora, fontSize = 11.sp, color = Color.Gray)
+                                            if(mov.detalle == "Monedero vaciado"){
+                                                Text("⚠️ Vaciado", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Red)
+                                            } else {
+                                                Text("+${mov.montoIngresado} | Total: ${mov.totalAcumulado}", fontSize = 12.sp, color = Color.Black)
+                                            }
+                                        }
+                                    }
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         Column(modifier = Modifier.width(100.dp)) {
                                             Text("MAC: ${mov.mac}", fontSize = 10.sp, color = Color.Gray)
                                             Text("IP: ${mov.ip}", fontSize = 10.sp, color = Color.Gray)
