@@ -106,7 +106,6 @@ class MainActivity : ComponentActivity() {
             else -> "$monto soles"
         }
 
-        // ✅ PARA QUE AL TOCAR LA NOTIFICACIÓN ABRA LA APP
         val intent = Intent(this, MainActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         val pendingIntent = PendingIntent.getActivity(
@@ -184,7 +183,6 @@ class MainActivity : ComponentActivity() {
     private fun escucharDatos() {
         db.keepSynced(true)
         
-        // ✅ CARGA EL TOTAL GUARDADO AL ABRIR LA APP PARA NO DUPLICAR NOTIFICACIONES
         db.child("total_general").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 totalAnterior = snapshot.getValue(Int::class.java) ?: 0
@@ -247,6 +245,14 @@ class MainActivity : ComponentActivity() {
         })
     }
 
+    // ✅ FUNCIÓN NUEVA: REINICIAR SENSORES
+    private fun reiniciarSensores() {
+        temperatura = "-- °C"
+        voltaje = "-- V"
+        distanciaRayos = "-- km"
+        Toast.makeText(this, "✅ Sensores reiniciados", Toast.LENGTH_SHORT).show()
+    }
+
     @Composable
     fun PantallaPrincipal() {
         Scaffold(
@@ -269,7 +275,19 @@ class MainActivity : ComponentActivity() {
                     BotonDato("RAYOS", distanciaRayos)
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // ✅ BOTÓN NUEVO: REINICIAR SENSORES
+                Button(
+                    onClick = { reiniciarSensores() },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.height(40.dp)
+                ) {
+                    Text("REINICIAR SENSORES", fontSize = 11.sp)
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Button(
                     onClick = { pedirClave() },
@@ -433,6 +451,7 @@ class MainActivity : ComponentActivity() {
         tts?.shutdown()
     }
 }
+
 // ✅ SERVICIO QUE MANTIENE LA APP DESPIERTA AUNQUE LA CIERRES
 class EscuchaFirebaseService : android.app.Service() {
     private val db = FirebaseDatabase.getInstance().reference
@@ -531,4 +550,3 @@ class EscuchaFirebaseService : android.app.Service() {
         tts?.shutdown()
     }
 }
-
