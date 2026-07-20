@@ -95,7 +95,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ✅ FUNCIÓN PRINCIPAL: CONVIERTE EL MONTO A PALABRAS CON "MONEY"
+    // ✅ FUNCIÓN DE VOZ: "Money, un sol con cincuenta céntimos"
     private fun montoAVoz(monto: Double): String {
         val soles = monto.toInt()
         val centimos = Math.round((monto - soles) * 100)
@@ -529,7 +529,7 @@ class EscuchaFirebaseService : android.app.Service() {
     private var tts: TextToSpeech? = null
     private var vozLista = false
 
-    // ✅ MISMA FUNCIÓN PARA EL SERVICIO
+    // ✅ MISMA FUNCIÓN DE VOZ PARA EL SERVICIO
     private fun montoAVoz(monto: Double): String {
         val soles = monto.toInt()
         val centimos = Math.round((monto - soles) * 100)
