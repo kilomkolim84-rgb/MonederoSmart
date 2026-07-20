@@ -161,9 +161,6 @@ class MainActivity : ComponentActivity() {
         hablar(montoAVoz(monto))
     }
 
-    // ==============================================
-    // ✅ TODAS LAS VARIABLES DECLARADAS EXPLÍCITAMENTE
-    // ==============================================
     private var totalGeneral: Double by mutableStateOf(0.0)
     private var ultimoMovimiento: String by mutableStateOf("-")
     private var historial: List<Movimiento> by mutableStateOf(emptyList())
@@ -172,14 +169,14 @@ class MainActivity : ComponentActivity() {
     private var distanciaRayos: String by mutableStateOf("-- km")
     private var totalAnterior: Double = 0.0
 
-// ✅ FUNCIÓN CORREGIDA — NO FALLA NUNCA
-private fun leerNumero(snapshot: DataSnapshot, defecto: Double = 0.0): Double {
-    val valor = snapshot.getValue(Any::class.java)
-    return when (valor) {
-        is Number -> valor.toDouble()
-        else -> defecto
+    // ✅ FUNCIÓN CORREGIDA — NO FALLA
+    private fun leerNumero(snapshot: DataSnapshot, defecto: Double = 0.0): Double {
+        val valor = snapshot.getValue(Any::class.java)
+        return when (valor) {
+            is Number -> valor.toDouble()
+            else -> defecto
+        }
     }
-}
 
     private fun cargarHistorialGuardado() {
         db.child("historial").addListenerForSingleValueEvent(object : ValueEventListener {
@@ -535,15 +532,18 @@ private fun leerNumero(snapshot: DataSnapshot, defecto: Double = 0.0): Double {
 
 class EscuchaFirebaseService : android.app.Service() {
     private val db = FirebaseDatabase.getInstance().reference
-    private var totalAnterior: Double = 0.0  // ✅ EXPLÍCITO Double
+    private var totalAnterior: Double = 0.0
     private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
     private var tts: TextToSpeech? = null
     private var vozLista = false
 
-    // ✅ FUNCIÓN CORREGIDA — TIPOS EXPLÍCITOS
+    // ✅ AQUÍ ESTABA EL ERROR — AHORA ESTÁ CORREGIDO
     private fun leerNumero(snapshot: DataSnapshot, defecto: Double = 0.0): Double {
-        val valor: Number? = snapshot.getValue(Number::class.java)
-        return valor?.toDouble() ?: defecto
+        val valor = snapshot.getValue(Any::class.java)
+        return when (valor) {
+            is Number -> valor.toDouble()
+            else -> defecto
+        }
     }
 
     private fun montoAVoz(monto: Double): String {
