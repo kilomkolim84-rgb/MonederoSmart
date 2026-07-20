@@ -55,7 +55,6 @@ class MainActivity : ComponentActivity() {
     private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
     private var tts: TextToSpeech? = null
     private var vozLista = false
-    private var ultimoCodigoRecibido = ""
 
     private lateinit var prefs: SharedPreferences
     private val TOTAL_GUARDADO = "total_acumulado"
@@ -174,7 +173,6 @@ class MainActivity : ComponentActivity() {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val nuevoTotalFirebase = snapshot.getValue(Double::class.java) ?: 0.0
                 
-                // ✅ SOLO SUMAR SI HAY INGRESO REAL — SIN REESCRIBIR FIREBASE = SIN BUCLE
                 if(nuevoTotalFirebase > totalAnterior){
                     val cuantoEntro = nuevoTotalFirebase - totalAnterior
                     val totalAcumulado = leerTotalGuardado() + cuantoEntro
@@ -229,11 +227,16 @@ class MainActivity : ComponentActivity() {
         })
     }
 
+    // ✅ TICKETS: SE LEE UNA SOLA VEZ Y SE MARCA COMO LEÍDO INMEDIATAMENTE
     private fun escucharTicketsNuevos() {
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (hijo in snapshot.children) {
-                    if (hijo.child("leido_por_monedero").getValue(Boolean::class.java) == true) continue
+                    
+                    // ✅ SI YA FUE LEÍDO → LO SALTEA, NO LO VUELVE A SUMAR
+                    if (hijo.child("leido_por_monedero").getValue(Boolean::class.java) == true) {
+                        continue
+                    }
 
                     val codigo = hijo.child("codigo").getValue(String::class.java) ?: ""
                     val monto = hijo.child("monto").getValue(Double::class.java) 
@@ -243,26 +246,29 @@ class MainActivity : ComponentActivity() {
 
                     if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
                     if (monto <= 0.0) continue
-                    if (codigo == ultimoCodigoRecibido) continue
 
-                    ultimoCodigoRecibido = codigo
+                    // ✅ LO MARCA COMO LEÍDO INMEDIATAMENTE → NADIE LO VUELVE A TOCAR
+                    hijo.ref.child("leido_por_monedero").setValue(true)
+
+                    // ✅ SUMA EL MONTO
+                    val totalAcumulado = leerTotalGuardado() + monto
+                    totalGeneral = totalAcumulado
+                    guardarTotal(totalAcumulado)
+
                     val nuevoTicket = Movimiento(
                         fechaHora = fecha,
                         detalle = "Ticket generado",
                         montoIngresado = monto,
-                        totalAcumulado = totalGeneral,
+                        totalAcumulado = totalAcumulado,
                         codigo = codigo,
                         alias = ""
                     )
                     historial = listOf(nuevoTicket) + historial
                     
-                    hijo.ref.child("leido_por_monedero").setValue(true)
-
-                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                        hijo.ref.removeValue()
-                    }, 60000)
+                    hablarPling()
+                    mostrarNotificacion(monto, totalAcumulado)
                     
-                    println("✅ TICKET LEÍDO — SE BORRARÁ EN 1 MINUTO: $codigo — S/ $monto")
+                    println("✅ TICKET LEÍDO Y SUMADO: $codigo — S/ $monto — MARCADO COMO LEÍDO")
                 }
             }
             override fun onCancelled(e: DatabaseError) {
@@ -503,7 +509,6 @@ class MainActivity : ComponentActivity() {
         totalAnterior = 0.0
         totalGeneral = 0.0
         guardarTotal(0.0)
-        ultimoCodigoRecibido = ""
         
         hablarPling()
         Toast.makeText(this, "✅ Vaciado correctamente", Toast.LENGTH_SHORT).show()
