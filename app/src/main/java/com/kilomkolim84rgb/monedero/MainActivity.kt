@@ -172,11 +172,14 @@ class MainActivity : ComponentActivity() {
     private var distanciaRayos: String by mutableStateOf("-- km")
     private var totalAnterior: Double = 0.0
 
-    // ✅ FUNCIÓN CORREGIDA — TODOS LOS TIPOS EXPLÍCITOS
-    private fun leerNumero(snapshot: DataSnapshot, defecto: Double = 0.0): Double {
-        val valor: Number? = snapshot.getValue(Number::class.java)
-        return valor?.toDouble() ?: defecto
+// ✅ FUNCIÓN CORREGIDA — NO FALLA NUNCA
+private fun leerNumero(snapshot: DataSnapshot, defecto: Double = 0.0): Double {
+    val valor = snapshot.getValue(Any::class.java)
+    return when (valor) {
+        is Number -> valor.toDouble()
+        else -> defecto
     }
+}
 
     private fun cargarHistorialGuardado() {
         db.child("historial").addListenerForSingleValueEvent(object : ValueEventListener {
