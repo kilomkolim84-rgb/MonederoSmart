@@ -75,7 +75,6 @@ class MainActivity : ComponentActivity() {
         setContent { PantallaPrincipal() }
         escucharDatos()
         escucharTicketsNuevos()
-        cargarHistorialGuardado()
     }
 
     private fun crearCanalNotificaciones() {
@@ -138,28 +137,6 @@ class MainActivity : ComponentActivity() {
     private var distanciaRayos by mutableStateOf("-- km")
     private var totalAnterior = 0.0
 
-    private fun cargarHistorialGuardado() {
-        db.child("historial").addListenerForSingleValueEvent(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val lista = mutableListOf<Movimiento>()
-                for(item in snapshot.children){
-                    lista.add(
-                        Movimiento(
-                            fechaHora = item.child("fechaHora").getValue(String::class.java) ?: "",
-                            detalle = item.child("detalle").getValue(String::class.java) ?: "",
-                            montoIngresado = item.child("montoIngresado").getValue(Double::class.java) ?: 0.0,
-                            totalAcumulado = item.child("totalAcumulado").getValue(Double::class.java) ?: 0.0,
-                            codigo = item.child("codigo").getValue(String::class.java) ?: "",
-                            alias = item.child("alias").getValue(String::class.java) ?: ""
-                        )
-                    )
-                }
-                historial = lista.reversed()
-            }
-            override fun onCancelled(e: DatabaseError) {}
-        })
-    }
-
     private fun escucharDatos() {
         db.keepSynced(true)
         
@@ -179,7 +156,6 @@ class MainActivity : ComponentActivity() {
                     val fecha = formatoFecha.format(Date())
                     val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal, "", "")
                     historial = listOf(nuevoMov) + historial
-                    db.child("historial").push().setValue(nuevoMov)
                     db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
                     
                     hablarPling()
@@ -225,27 +201,25 @@ class MainActivity : ComponentActivity() {
         })
     }
 
-    // ✅ ESCUCHA TICKETS DIRECTO A HISTORIAL — SIN "ultimo" — CON FILTROS
+    // ✅ ESCUCHA TICKETS — SOLO LEE, NO ESCRIBE NADA
     private fun escucharTicketsNuevos() {
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (hijo in snapshot.children) {
                     val codigo = hijo.child("codigo").getValue(String::class.java) ?: ""
-                    val monto = hijo.child("montoIngresado").getValue(Double::class.java) 
-                                ?: hijo.child("monto").getValue(Double::class.java) ?: 0.0
-                    val fecha = hijo.child("fechaHora").getValue(String::class.java) 
-                                ?: hijo.child("fecha").getValue(String::class.java) ?: ""
+                    val monto = hijo.child("monto").getValue(Double::class.java) ?: 0.0
+                    val fecha = hijo.child("fecha").getValue(String::class.java) ?: ""
 
-                    // 🔒 FILTRO 1: Solo código de 6 dígitos numéricos
+                    // 🔒 FILTRO 1: Solo código de 6 dígitos
                     if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
 
                     // 🔒 FILTRO 2: Solo monto mayor a 0
                     if (monto <= 0.0) continue
 
-                    // 🔒 FILTRO 3: No repetir ticket
+                    // 🔒 FILTRO 3: No repetir
                     if (codigo == ultimoCodigoRecibido) continue
 
-                    // ✅ TICKET VÁLIDO — REGISTRAR
+                    // ✅ TICKET VÁLIDO — MOSTRAR SOLO EN LA APP
                     ultimoCodigoRecibido = codigo
                     val nuevoTicket = Movimiento(
                         fechaHora = fecha,
@@ -256,7 +230,11 @@ class MainActivity : ComponentActivity() {
                         alias = ""
                     )
                     historial = listOf(nuevoTicket) + historial
-                    println("✅ TICKET RECIBIDO: $codigo — S/ $monto")
+                    
+                    // ✅ ELIMINAR EL TICKET DE FIREBASE DESPUÉS DE LEERLO
+                    hijo.ref.removeValue()
+                    
+                    println("✅ TICKET LEÍDO Y ELIMINADO: $codigo — S/ $monto")
                 }
             }
             override fun onCancelled(e: DatabaseError) {
@@ -291,7 +269,6 @@ class MainActivity : ComponentActivity() {
                     historial = historial.toMutableList().also {
                         it[posicion] = it[posicion].copy(alias = nombre)
                     }
-                    db.child("historial").child(claveFirebase).child("alias").setValue(nombre)
                     Toast.makeText(this, "✅ Alias guardado: $nombre", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -387,7 +364,6 @@ class MainActivity : ComponentActivity() {
                             val mov = historial[posicion]
                             val textoAlias = if(mov.alias.isNotEmpty()) mov.alias else "DESCONOCIDO"
                             val colorAlias = if(mov.alias.isNotEmpty()) Color(0xFF1976D2) else Color(0xFFFF9800)
-                            val claveFirebase = mov.fechaHora.replace("/","-").replace(":","-").replace(" ","_")
                             val textoMonto = formatearMonto(mov.montoIngresado)
 
                             Card(
@@ -418,7 +394,7 @@ class MainActivity : ComponentActivity() {
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = colorAlias,
-                                                modifier = Modifier.clickable { ponerAlias(posicion, claveFirebase) }
+                                                modifier = Modifier.clickable { ponerAlias(posicion, "") }
                                             )
                                             Text(mov.fechaHora, fontSize = 11.sp, color = Color.Gray)
                                             if(mov.detalle == "Monedero vaciado"){
@@ -488,18 +464,19 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
-    // ✅ VACIAR SIN GENERAR BASURA EN FIREBASE
+    // ✅ VACIAR SIN GENERAR NADA EN FIREBASE
     private fun vaciar() {
         val fecha = formatoFecha.format(Date())
         val reg = Movimiento(fecha, "Monedero vaciado", 0.0, 0.0, "")
         historial = listOf(reg) + historial
         
-        // ✅ SOLO REINICIA TOTALES — NO ESCRIBE NADA EN HISTORIAL
+        // ✅ SOLO REINICIA TOTALES — NO ESCRIBE NADA EN HISTORIAL DE FIREBASE
         db.child("total_general").setValue(0.0)
         db.child("ultimo_movimiento").setValue("Monedero vaciado")
         
         totalAnterior = 0.0
         totalGeneral = 0.0
+        ultimoCodigoRecibido = "" // Reiniciar control de tickets
         
         hablarPling()
         Toast.makeText(this, "✅ Vaciado correctamente", Toast.LENGTH_SHORT).show()
@@ -556,7 +533,6 @@ class EscuchaFirebaseService : android.app.Service() {
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
                     val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal, "", "")
-                    db.child("historial").push().setValue(nuevoMov)
                     db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
                     
                     if(vozLista){
