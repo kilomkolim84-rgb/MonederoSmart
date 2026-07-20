@@ -66,7 +66,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         tts = TextToSpeech(this) { estado ->
             vozLista = estado == TextToSpeech.SUCCESS
-            if(vozLista) tts?.language = Locale("es", "PE")
+            if(vozLista) {
+                tts?.language = Locale("es", "PE")
+                tts?.setPitch(1.3f)       // 🔊 Voz más aguda y clara
+                tts?.setSpeechRate(0.85f) // 🔊 Más lento, se escucha mejor
+            }
         }
 
         crearCanalNotificaciones()
@@ -101,9 +105,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // 🎤 AHORA SOLO DICE "PLING" — SIN NÚMEROS NI CÉNTIMOS
+    // 🎤 PLING FUERTE Y CLARO — VOLUMEN SUBIDO
     private fun hablarPling() {
-        if(vozLista) tts?.speak("pling", TextToSpeech.QUEUE_FLUSH, null, null)
+        if(vozLista) {
+            tts?.speak("pling", TextToSpeech.QUEUE_FLUSH, null, null)
+        }
     }
 
     private fun mostrarNotificacion(monto: Double, total: Double) {
@@ -206,7 +212,7 @@ class MainActivity : ComponentActivity() {
                     db.child("historial").push().setValue(nuevoMov)
                     db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
                     
-                    hablarPling()  // 🎤 SOLO DICE "PLING"
+                    hablarPling()
                     mostrarNotificacion(cuantoEntro, nuevoTotal)
                 }
                 totalAnterior = nuevoTotal
@@ -249,13 +255,21 @@ class MainActivity : ComponentActivity() {
         })
     }
 
-    // 📄 ESCUCHA TICKETS NUEVOS DEL ESP32 — MUESTRA CÓDIGO + QR REAL
+    // 📄 ESCUCHA TICKETS NUEVOS — LEE EL CÓDIGO REAL DEL ESP32, SIN INVENTAR NADA
     private fun escucharTicketsNuevos() {
         db.child("tickets/ultimo").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val codigo = snapshot.child("codigo").getValue(String::class.java) ?: return
-                val monto = snapshot.child("monto").getValue(Double::class.java) ?: return
-                val qrTexto = snapshot.child("qr_texto").getValue(String::class.java) ?: ""
+                // ✅ LEE DIRECTAMENTE LO QUE MANDÓ EL ESP32 — SIN CALCULAR NI INVENTAR NADA
+                val codigoReal = snapshot.child("codigo").getValue(String::class.java)
+                val monto = snapshot.child("monto").getValue(Double::class.java)
+                val qrTextoReal = snapshot.child("qr_texto").getValue(String::class.java)
+                
+                // ❌ SI NO HAY DATOS REALES, NO HACE NADA
+                if (codigoReal.isNullOrBlank() || monto == null) {
+                    return
+                }
+                
+                // ✅ USA EXACTAMENTE EL MISMO CÓDIGO Y QR DEL TICKET
                 val fecha = formatoFecha.format(Date())
                 
                 val nuevoTicket = Movimiento(
@@ -263,14 +277,18 @@ class MainActivity : ComponentActivity() {
                     detalle = "Ticket generado",
                     montoIngresado = monto,
                     totalAcumulado = totalGeneral,
-                    codigo = codigo,
-                    qrTexto = qrTexto,
+                    codigo = codigoReal,       // ✅ EL MISMO CÓDIGO DEL ESP32
+                    qrTexto = qrTextoReal ?: "", // ✅ EL MISMO QR DEL ESP32
                     alias = ""
                 )
                 historial = listOf(nuevoTicket) + historial
                 db.child("historial").push().setValue(nuevoTicket)
+                
+                println("✅ TICKET RECIBIDO — CÓDIGO: $codigoReal")
             }
-            override fun onCancelled(e: DatabaseError) {}
+            override fun onCancelled(e: DatabaseError) {
+                Toast.makeText(this@MainActivity, "Error leyendo ticket", Toast.LENGTH_SHORT).show()
+            }
         })
     }
 
@@ -575,7 +593,11 @@ class EscuchaFirebaseService : android.app.Service() {
 
         tts = TextToSpeech(this) { estado ->
             vozLista = estado == TextToSpeech.SUCCESS
-            if(vozLista) tts?.language = Locale("es", "PE")
+            if(vozLista) {
+                tts?.language = Locale("es", "PE")
+                tts?.setPitch(1.3f)       // 🔊 MISMA CONFIGURACIÓN DE VOZ
+                tts?.setSpeechRate(0.85f)
+            }
         }
 
         db.child("total_general").addListenerForSingleValueEvent(object : ValueEventListener {
@@ -595,7 +617,7 @@ class EscuchaFirebaseService : android.app.Service() {
                     db.child("historial").push().setValue(nuevoMov)
                     db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
                     
-                    // 🎤 SOLO DICE "PLING"
+                    // 🎤 PLING FUERTE Y CLARO TAMBIÉN EN EL SERVICIO
                     if(vozLista){
                         tts?.speak("pling", TextToSpeech.QUEUE_FLUSH, null, null)
                     }
