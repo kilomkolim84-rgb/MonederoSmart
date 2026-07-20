@@ -95,41 +95,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun montoAVoz(monto: Double): String {
-        val soles = monto.toInt()
-        val centimos = Math.round((monto - soles) * 100)
-
-        val parteSoles = when (soles) {
-            0 -> ""
-            1 -> "un sol"
-            2 -> "dos soles"
-            3 -> "tres soles"
-            4 -> "cuatro soles"
-            5 -> "cinco soles"
-            10 -> "diez soles"
-            else -> if (soles > 0) "$soles soles" else ""
+    private fun textoMonto(monto: Double): String {
+        return when(monto) {
+            0.10 -> "diez céntimos"
+            0.20 -> "veinte céntimos"
+            0.50 -> "cincuenta céntimos"
+            0.60 -> "sesenta céntimos"
+            0.70 -> "setenta céntimos"
+            1.00 -> "un sol"
+            2.00 -> "dos soles"
+            5.00 -> "cinco soles"
+            else -> String.format("%.2f soles", monto)
         }
-
-        val parteCentimos = when (centimos) {
-            0 -> ""
-            10 -> "diez céntimos"
-            20 -> "veinte céntimos"
-            30 -> "treinta céntimos"
-            40 -> "cuarenta céntimos"
-            50 -> "cincuenta céntimos"
-            else -> "$centimos céntimos"
-        }
-
-        val y = if (soles > 0 && centimos > 0) " con " else ""
-
-        return "Money, $parteSoles$y$parteCentimos".trim()
-            .replace("Money, ", "Money, ")
-            .replace("  ", " ")
     }
 
     private fun mostrarNotificacion(monto: Double, total: Double) {
-        val textoMonto = montoAVoz(monto).removePrefix("Money, ")
-
         val intent = Intent(this, MainActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         val pendingIntent = PendingIntent.getActivity(
@@ -142,7 +122,7 @@ class MainActivity : ComponentActivity() {
         val aviso = NotificationCompat.Builder(this, CANAL_NOTIFICACIONES)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("✅ INGRESO REGISTRADO")
-            .setContentText("Entró $textoMonto | Total: ${String.format("%.2f", total)} soles")
+            .setContentText("Entró ${textoMonto(monto)} | Total: ${String.format("%.2f", total)} soles")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
@@ -158,28 +138,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun hablarMonto(monto: Double) {
-        hablar(montoAVoz(monto))
+        hablar(textoMonto(monto))
     }
 
-    private var totalGeneral: Double by mutableStateOf(0.0)
-    private var ultimoMovimiento: String by mutableStateOf("-")
-    private var historial: List<Movimiento> by mutableStateOf(emptyList())
-    private var temperatura: String by mutableStateOf("-- °C")
-    private var voltaje: String by mutableStateOf("-- V")
-    private var distanciaRayos: String by mutableStateOf("-- km")
-    private var totalAnterior: Double = 0.0
-
-    // ✅ FUNCIÓN CORREGIDA — SIN VALOR POR DEFECTO = SE ACABÓ EL ERROR
-    private fun leerNumero(snapshot: DataSnapshot, defecto: Double): Double {
-        val valor = snapshot.value
-        return when {
-            valor is Double -> valor
-            valor is Long -> valor.toDouble()
-            valor is Int -> valor.toDouble()
-            valor is Number -> valor.toDouble()
-            else -> defecto
-        }
-    }
+    private var totalGeneral by mutableStateOf(0.0)
+    private var ultimoMovimiento by mutableStateOf("-")
+    private var historial by mutableStateOf(listOf<Movimiento>())
+    private var temperatura by mutableStateOf("-- °C")
+    private var voltaje by mutableStateOf("-- V")
+    private var distanciaRayos by mutableStateOf("-- km")
+    private var totalAnterior = 0.0
 
     private fun cargarHistorialGuardado() {
         db.child("historial").addListenerForSingleValueEvent(object : ValueEventListener {
@@ -190,8 +158,8 @@ class MainActivity : ComponentActivity() {
                         Movimiento(
                             fechaHora = item.child("fechaHora").getValue(String::class.java) ?: "",
                             detalle = item.child("detalle").getValue(String::class.java) ?: "",
-                            montoIngresado = leerNumero(item.child("montoIngresado"), 0.0),
-                            totalAcumulado = leerNumero(item.child("totalAcumulado"), 0.0),
+                            montoIngresado = item.child("montoIngresado").getValue(Double::class.java) ?: 0.0,
+                            totalAcumulado = item.child("totalAcumulado").getValue(Double::class.java) ?: 0.0,
                             mac = item.child("mac").getValue(String::class.java) ?: "--",
                             ip = item.child("ip").getValue(String::class.java) ?: "--",
                             alias = item.child("alias").getValue(String::class.java) ?: ""
@@ -209,7 +177,7 @@ class MainActivity : ComponentActivity() {
         
         db.child("total_general").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                totalAnterior = leerNumero(snapshot, 0.0)
+                totalAnterior = snapshot.getValue(Double::class.java) ?: 0.0
                 totalGeneral = totalAnterior
             }
             override fun onCancelled(e: DatabaseError) {}
@@ -217,7 +185,7 @@ class MainActivity : ComponentActivity() {
 
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val nuevoTotal = leerNumero(snapshot, 0.0)
+                val nuevoTotal = snapshot.getValue(Double::class.java) ?: 0.0
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
@@ -246,24 +214,24 @@ class MainActivity : ComponentActivity() {
 
         db.child("sensores/temperatura").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(s: DataSnapshot) {
-                val v = leerNumero(s, Double.NaN)
-                temperatura = if(!v.isNaN()) String.format("%.1f °C", v) else "-- °C"
+                val v = s.getValue(Double::class.java)
+                temperatura = if(v!=null) String.format("%.1f °C", v) else "-- °C"
             }
             override fun onCancelled(e: DatabaseError) {}
         })
 
         db.child("sensores/voltaje").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(s: DataSnapshot) {
-                val v = leerNumero(s, Double.NaN)
-                voltaje = if(!v.isNaN()) String.format("%.1f V", v) else "-- V"
+                val v = s.getValue(Double::class.java)
+                voltaje = if(v!=null) String.format("%.1f V", v) else "-- V"
             }
             override fun onCancelled(e: DatabaseError) {}
         })
 
         db.child("sensores/rayos_distancia").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(s: DataSnapshot) {
-                val v = leerNumero(s, Double.NaN)
-                distanciaRayos = if(!v.isNaN()) String.format("%.0f km", v) else "-- km"
+                val v = s.getValue(Double::class.java)
+                distanciaRayos = if(v!=null) String.format("%.0f km", v) else "-- km"
             }
             override fun onCancelled(e: DatabaseError) {}
         })
@@ -308,6 +276,8 @@ class MainActivity : ComponentActivity() {
             monto == 0.10 -> "+0.10 céntimos"
             monto == 0.20 -> "+0.20 céntimos"
             monto == 0.50 -> "+0.50 céntimos"
+            monto == 0.60 -> "+0.60 céntimos"
+            monto == 0.70 -> "+0.70 céntimos"
             monto == 1.00 -> "+1 sol"
             monto == 2.00 -> "+2 soles"
             monto == 5.00 -> "+5 soles"
@@ -535,53 +505,23 @@ class MainActivity : ComponentActivity() {
 
 class EscuchaFirebaseService : android.app.Service() {
     private val db = FirebaseDatabase.getInstance().reference
-    private var totalAnterior: Double = 0.0
+    private var totalAnterior = 0.0
     private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
     private var tts: TextToSpeech? = null
     private var vozLista = false
 
-    // ✅ MISMA FUNCIÓN CORREGIDA EN EL SERVICIO — SIN VALOR POR DEFECTO
-    private fun leerNumero(snapshot: DataSnapshot, defecto: Double): Double {
-        val valor = snapshot.value
-        return when {
-            valor is Double -> valor
-            valor is Long -> valor.toDouble()
-            valor is Int -> valor.toDouble()
-            valor is Number -> valor.toDouble()
-            else -> defecto
+    private fun textoMonto(monto: Double): String {
+        return when(monto) {
+            0.10 -> "diez céntimos"
+            0.20 -> "veinte céntimos"
+            0.50 -> "cincuenta céntimos"
+            0.60 -> "sesenta céntimos"
+            0.70 -> "setenta céntimos"
+            1.00 -> "un sol"
+            2.00 -> "dos soles"
+            5.00 -> "cinco soles"
+            else -> String.format("%.2f soles", monto)
         }
-    }
-
-    private fun montoAVoz(monto: Double): String {
-        val soles = monto.toInt()
-        val centimos = Math.round((monto - soles) * 100)
-
-        val parteSoles = when (soles) {
-            0 -> ""
-            1 -> "un sol"
-            2 -> "dos soles"
-            3 -> "tres soles"
-            4 -> "cuatro soles"
-            5 -> "cinco soles"
-            10 -> "diez soles"
-            else -> if (soles > 0) "$soles soles" else ""
-        }
-
-        val parteCentimos = when (centimos) {
-            0 -> ""
-            10 -> "diez céntimos"
-            20 -> "veinte céntimos"
-            30 -> "treinta céntimos"
-            40 -> "cuarenta céntimos"
-            50 -> "cincuenta céntimos"
-            else -> "$centimos céntimos"
-        }
-
-        val y = if (soles > 0 && centimos > 0) " con " else ""
-
-        return "Money, $parteSoles$y$parteCentimos".trim()
-            .replace("Money, ", "Money, ")
-            .replace("  ", " ")
     }
 
     override fun onCreate() {
@@ -605,14 +545,14 @@ class EscuchaFirebaseService : android.app.Service() {
 
         db.child("total_general").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                totalAnterior = leerNumero(snapshot, 0.0)
+                totalAnterior = snapshot.getValue(Double::class.java) ?: 0.0
             }
             override fun onCancelled(e: DatabaseError) {}
         })
 
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val nuevoTotal = leerNumero(snapshot, 0.0)
+                val nuevoTotal = snapshot.getValue(Double::class.java) ?: 0.0
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
@@ -621,11 +561,8 @@ class EscuchaFirebaseService : android.app.Service() {
                     db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
                     
                     if(vozLista){
-                        val texto = montoAVoz(cuantoEntro)
-                        tts?.speak(texto, TextToSpeech.QUEUE_FLUSH, null, null)
+                        tts?.speak(textoMonto(cuantoEntro), TextToSpeech.QUEUE_FLUSH, null, null)
                     }
-                    
-                    val textoMonto = montoAVoz(cuantoEntro).removePrefix("Money, ")
                     
                     val intent = Intent(this@EscuchaFirebaseService, MainActivity::class.java)
                     intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -639,7 +576,7 @@ class EscuchaFirebaseService : android.app.Service() {
                     val aviso = NotificationCompat.Builder(this@EscuchaFirebaseService, CANAL_NOTIFICACIONES)
                         .setSmallIcon(android.R.drawable.ic_menu_info_details)
                         .setContentTitle("✅ INGRESO REGISTRADO")
-                        .setContentText("Entró $textoMonto | Total: ${String.format("%.2f", nuevoTotal)} soles")
+                        .setContentText("Entró ${textoMonto(cuantoEntro)} | Total: ${String.format("%.2f", nuevoTotal)} soles")
                         .setPriority(NotificationCompat.PRIORITY_HIGH)
                         .setAutoCancel(true)
                         .setContentIntent(pendingIntent)
