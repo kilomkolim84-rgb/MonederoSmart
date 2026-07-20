@@ -161,17 +161,18 @@ class MainActivity : ComponentActivity() {
         hablar(montoAVoz(monto))
     }
 
+    // ==============================================
+    // ✅ CORREGIDO: TODO EXPLÍCITAMENTE COMO Double
+    // ==============================================
     private var totalGeneral by mutableStateOf(0.0)
     private var ultimoMovimiento by mutableStateOf("-")
     private var historial by mutableStateOf(listOf<Movimiento>())
     private var temperatura by mutableStateOf("-- °C")
     private var voltaje by mutableStateOf("-- V")
     private var distanciaRayos by mutableStateOf("-- km")
-    private var totalAnterior = 0.0
+    private var totalAnterior = 0.0  // ✅ EXPLÍCITO Double
 
-    // ==============================================
-    // ✅ AQUÍ ESTÁ LA SOLUCIÓN DEFINITIVA — NO TOCAR
-    // ==============================================
+    // ✅ FUNCIÓN SEGURA: LEE CUALQUIER NÚMERO DE FIREBASE
     private fun leerNumero(snapshot: DataSnapshot, defecto: Double = 0.0): Double {
         val valor = snapshot.getValue(Number::class.java)
         return valor?.toDouble() ?: defecto
@@ -531,12 +532,12 @@ class MainActivity : ComponentActivity() {
 
 class EscuchaFirebaseService : android.app.Service() {
     private val db = FirebaseDatabase.getInstance().reference
-    private var totalAnterior = 0.0
+    private var totalAnterior = 0.0  // ✅ EXPLÍCITO Double
     private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
     private var tts: TextToSpeech? = null
     private var vozLista = false
 
-    // ✅ MISMA FUNCIÓN — NO TOCAR
+    // ✅ FUNCIÓN SEGURA
     private fun leerNumero(snapshot: DataSnapshot, defecto: Double = 0.0): Double {
         val valor = snapshot.getValue(Number::class.java)
         return valor?.toDouble() ?: defecto
