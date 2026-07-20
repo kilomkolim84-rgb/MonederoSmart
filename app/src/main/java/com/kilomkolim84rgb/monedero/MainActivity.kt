@@ -162,19 +162,19 @@ class MainActivity : ComponentActivity() {
     }
 
     // ==============================================
-    // ✅ CORREGIDO: TODO EXPLÍCITAMENTE COMO Double
+    // ✅ TODAS LAS VARIABLES DECLARADAS EXPLÍCITAMENTE
     // ==============================================
-    private var totalGeneral by mutableStateOf(0.0)
-    private var ultimoMovimiento by mutableStateOf("-")
-    private var historial by mutableStateOf(listOf<Movimiento>())
-    private var temperatura by mutableStateOf("-- °C")
-    private var voltaje by mutableStateOf("-- V")
-    private var distanciaRayos by mutableStateOf("-- km")
-    private var totalAnterior = 0.0  // ✅ EXPLÍCITO Double
+    private var totalGeneral: Double by mutableStateOf(0.0)
+    private var ultimoMovimiento: String by mutableStateOf("-")
+    private var historial: List<Movimiento> by mutableStateOf(emptyList())
+    private var temperatura: String by mutableStateOf("-- °C")
+    private var voltaje: String by mutableStateOf("-- V")
+    private var distanciaRayos: String by mutableStateOf("-- km")
+    private var totalAnterior: Double = 0.0
 
-    // ✅ FUNCIÓN SEGURA: LEE CUALQUIER NÚMERO DE FIREBASE
+    // ✅ FUNCIÓN CORREGIDA — TODOS LOS TIPOS EXPLÍCITOS
     private fun leerNumero(snapshot: DataSnapshot, defecto: Double = 0.0): Double {
-        val valor = snapshot.getValue(Number::class.java)
+        val valor: Number? = snapshot.getValue(Number::class.java)
         return valor?.toDouble() ?: defecto
     }
 
@@ -187,8 +187,8 @@ class MainActivity : ComponentActivity() {
                         Movimiento(
                             fechaHora = item.child("fechaHora").getValue(String::class.java) ?: "",
                             detalle = item.child("detalle").getValue(String::class.java) ?: "",
-                            montoIngresado = leerNumero(item.child("montoIngresado")),
-                            totalAcumulado = leerNumero(item.child("totalAcumulado")),
+                            montoIngresado = leerNumero(item.child("montoIngresado"), 0.0),
+                            totalAcumulado = leerNumero(item.child("totalAcumulado"), 0.0),
                             mac = item.child("mac").getValue(String::class.java) ?: "--",
                             ip = item.child("ip").getValue(String::class.java) ?: "--",
                             alias = item.child("alias").getValue(String::class.java) ?: ""
@@ -206,7 +206,7 @@ class MainActivity : ComponentActivity() {
         
         db.child("total_general").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                totalAnterior = leerNumero(snapshot)
+                totalAnterior = leerNumero(snapshot, 0.0)
                 totalGeneral = totalAnterior
             }
             override fun onCancelled(e: DatabaseError) {}
@@ -214,7 +214,7 @@ class MainActivity : ComponentActivity() {
 
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val nuevoTotal = leerNumero(snapshot)
+                val nuevoTotal = leerNumero(snapshot, 0.0)
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
@@ -532,14 +532,14 @@ class MainActivity : ComponentActivity() {
 
 class EscuchaFirebaseService : android.app.Service() {
     private val db = FirebaseDatabase.getInstance().reference
-    private var totalAnterior = 0.0  // ✅ EXPLÍCITO Double
+    private var totalAnterior: Double = 0.0  // ✅ EXPLÍCITO Double
     private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
     private var tts: TextToSpeech? = null
     private var vozLista = false
 
-    // ✅ FUNCIÓN SEGURA
+    // ✅ FUNCIÓN CORREGIDA — TIPOS EXPLÍCITOS
     private fun leerNumero(snapshot: DataSnapshot, defecto: Double = 0.0): Double {
-        val valor = snapshot.getValue(Number::class.java)
+        val valor: Number? = snapshot.getValue(Number::class.java)
         return valor?.toDouble() ?: defecto
     }
 
@@ -596,14 +596,14 @@ class EscuchaFirebaseService : android.app.Service() {
 
         db.child("total_general").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                totalAnterior = leerNumero(snapshot)
+                totalAnterior = leerNumero(snapshot, 0.0)
             }
             override fun onCancelled(e: DatabaseError) {}
         })
 
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val nuevoTotal = leerNumero(snapshot)
+                val nuevoTotal = leerNumero(snapshot, 0.0)
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
