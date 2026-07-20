@@ -169,8 +169,8 @@ class MainActivity : ComponentActivity() {
     private var distanciaRayos: String by mutableStateOf("-- km")
     private var totalAnterior: Double = 0.0
 
-    // ✅ FUNCIÓN CORREGIDA — CONVIERTE CUALQUIER TIPO DE NÚMERO A DOUBLE
-    private fun leerNumero(snapshot: DataSnapshot, defecto: Double = 0.0): Double {
+    // ✅ FUNCIÓN CORREGIDA — SIN VALOR POR DEFECTO = SE ACABÓ EL ERROR
+    private fun leerNumero(snapshot: DataSnapshot, defecto: Double): Double {
         val valor = snapshot.value
         return when {
             valor is Double -> valor
@@ -540,8 +540,8 @@ class EscuchaFirebaseService : android.app.Service() {
     private var tts: TextToSpeech? = null
     private var vozLista = false
 
-    // ✅ MISMA FUNCIÓN CORREGIDA EN EL SERVICIO — CONVIERTE TODOS LOS TIPOS
-    private fun leerNumero(snapshot: DataSnapshot, defecto: Double = 0.0): Double {
+    // ✅ MISMA FUNCIÓN CORREGIDA EN EL SERVICIO — SIN VALOR POR DEFECTO
+    private fun leerNumero(snapshot: DataSnapshot, defecto: Double): Double {
         val valor = snapshot.value
         return when {
             valor is Double -> valor
