@@ -4,7 +4,9 @@ import android.app.AlertDialog
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
@@ -54,11 +56,17 @@ class MainActivity : ComponentActivity() {
     private var tts: TextToSpeech? = null
     private var vozLista = false
     private var ultimoCodigoRecibido = ""
+    
+    // ✅ GUARDADO PERMANENTE EN EL CELULAR
+    private lateinit var prefs: SharedPreferences
+    private val TOTAL_GUARDADO = "total_acumulado"
 
     private val permisoNotificaciones = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        prefs = getSharedPreferences("MonederoPrefs", Context.MODE_PRIVATE)
+        
         tts = TextToSpeech(this) { estado ->
             vozLista = estado == TextToSpeech.SUCCESS
             if(vozLista) {
@@ -129,40 +137,69 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // ✅ VARIABLES
     private var totalGeneral by mutableStateOf(0.0)
     private var ultimoMovimiento by mutableStateOf("-")
     private var historial by mutableStateOf(listOf<Movimiento>())
     private var temperatura by mutableStateOf("-- °C")
     private var voltaje by mutableStateOf("-- V")
     private var distanciaRayos by mutableStateOf("-- km")
-    private var totalAnterior = 0.0
+    private var totalAnteriorFirebase = 0.0
+
+    // ✅ LEER TOTAL GUARDADO AL ABRIR LA APP
+    private fun leerTotalGuardado(): Double {
+        return prefs.getFloat(TOTAL_GUARDADO, 0f).toDouble()
+    }
+
+    // ✅ GUARDAR TOTAL EN EL CELULAR
+    private fun guardarTotal(total: Double) {
+        prefs.edit().putFloat(TOTAL_GUARDADO, total.toFloat()).apply()
+    }
 
     private fun escucharDatos() {
         db.keepSynced(true)
         
+        // Cargar total guardado al iniciar
+        totalGeneral = leerTotalGuardado()
+        totalAnteriorFirebase = totalGeneral
+
         db.child("total_general").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                totalAnterior = snapshot.getValue(Double::class.java) ?: 0.0
-                totalGeneral = totalAnterior
+                val valorFirebase = snapshot.getValue(Double::class.java) ?: 0.0
+                // Si Firebase tiene más que lo guardado, usar ese
+                if(valorFirebase > totalGeneral) {
+                    totalGeneral = valorFirebase
+                    guardarTotal(totalGeneral)
+                }
+                totalAnteriorFirebase = totalGeneral
             }
             override fun onCancelled(e: DatabaseError) {}
         })
 
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val nuevoTotal = snapshot.getValue(Double::class.java) ?: 0.0
-                if(nuevoTotal > totalAnterior){
-                    val cuantoEntro = nuevoTotal - totalAnterior
+                val nuevoTotalFirebase = snapshot.getValue(Double::class.java) ?: 0.0
+                
+                // ✅ SOLO SUMAR SI HAY UN NUEVO INGRESO
+                if(nuevoTotalFirebase > totalAnteriorFirebase){
+                    val cuantoEntro = nuevoTotalFirebase - totalAnteriorFirebase
+                    
+                    // ✅ SUMAR AL TOTAL QUE YA ESTÁ GUARDADO
+                    val totalAcumulado = leerTotalGuardado() + cuantoEntro
+                    totalGeneral = totalAcumulado
+                    guardarTotal(totalAcumulado)
+                    
                     val fecha = formatoFecha.format(Date())
-                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal, "", "")
+                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, totalAcumulado, "", "")
                     historial = listOf(nuevoMov) + historial
+                    
                     db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
+                    db.child("total_general").setValue(totalAcumulado)
                     
                     hablarPling()
-                    mostrarNotificacion(cuantoEntro, nuevoTotal)
+                    mostrarNotificacion(cuantoEntro, totalAcumulado)
                 }
-                totalAnterior = nuevoTotal
-                totalGeneral = nuevoTotal
+                totalAnteriorFirebase = nuevoTotalFirebase
             }
             override fun onCancelled(e: DatabaseError) {
                 Toast.makeText(this@MainActivity, "Sin conexión", Toast.LENGTH_SHORT).show()
@@ -206,7 +243,6 @@ class MainActivity : ComponentActivity() {
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (hijo in snapshot.children) {
-                    // Si ya fue leído, no volver a procesar
                     if (hijo.child("leido_por_monedero").getValue(Boolean::class.java) == true) continue
 
                     val codigo = hijo.child("codigo").getValue(String::class.java) ?: ""
@@ -215,16 +251,10 @@ class MainActivity : ComponentActivity() {
                     val fecha = hijo.child("fecha").getValue(String::class.java) 
                                 ?: hijo.child("fechaHora").getValue(String::class.java) ?: ""
 
-                    // 🔒 FILTRO 1: Solo código de 6 dígitos numéricos
                     if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
-
-                    // 🔒 FILTRO 2: Solo monto mayor a 0
                     if (monto <= 0.0) continue
-
-                    // 🔒 FILTRO 3: No repetir el mismo ticket
                     if (codigo == ultimoCodigoRecibido) continue
 
-                    // ✅ TICKET VÁLIDO — MOSTRAR EN LA APP
                     ultimoCodigoRecibido = codigo
                     val nuevoTicket = Movimiento(
                         fechaHora = fecha,
@@ -236,14 +266,11 @@ class MainActivity : ComponentActivity() {
                     )
                     historial = listOf(nuevoTicket) + historial
                     
-                    // ✅ MARCAR COMO LEÍDO — SIN BORRAR TODAVÍA
                     hijo.ref.child("leido_por_monedero").setValue(true)
 
-                    // ✅ BORRAR DESPUÉS DE 1 MINUTO = 60,000 MILISEGUNDOS
-                    // Cada ticket cuenta su propio minuto desde que entró
                     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                         hijo.ref.removeValue()
-                    }, 60000) // ⏳ 1 MINUTO COMPLETO — las dos apps lo leen tranquilas
+                    }, 60000)
                     
                     println("✅ TICKET LEÍDO — SE BORRARÁ EN 1 MINUTO: $codigo — S/ $monto")
                 }
@@ -417,7 +444,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     Column(
                                         horizontalAlignment = Alignment.End,
-                                        verticalArrangement = Arrangement.Center
+                                        verticalArrangement = Alignment.CenterVertically
                                     ) {
                                         if(mov.codigo.isNotEmpty()){
                                             Text("CÓDIGO: ${mov.codigo}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
@@ -475,19 +502,19 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
-    // ✅ VACIAR SIN GENERAR NADA EN FIREBASE
+    // ✅ VACIAR — BORRA TODO Y GUARDA 0
     private fun vaciar() {
         val fecha = formatoFecha.format(Date())
         val reg = Movimiento(fecha, "Monedero vaciado", 0.0, 0.0, "")
         historial = listOf(reg) + historial
         
-        // ✅ SOLO REINICIA TOTALES — NO ESCRIBE NADA EN HISTORIAL DE FIREBASE
         db.child("total_general").setValue(0.0)
         db.child("ultimo_movimiento").setValue("Monedero vaciado")
         
-        totalAnterior = 0.0
         totalGeneral = 0.0
-        ultimoCodigoRecibido = "" // Reiniciar control de tickets
+        guardarTotal(0.0) // ✅ GUARDA 0 PERMANENTE
+        totalAnteriorFirebase = 0.0
+        ultimoCodigoRecibido = ""
         
         hablarPling()
         Toast.makeText(this, "✅ Vaciado correctamente", Toast.LENGTH_SHORT).show()
@@ -506,9 +533,11 @@ class EscuchaFirebaseService : android.app.Service() {
     private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
     private var tts: TextToSpeech? = null
     private var vozLista = false
+    private lateinit var prefs: SharedPreferences
 
     override fun onCreate() {
         super.onCreate()
+        prefs = getSharedPreferences("MonederoPrefs", Context.MODE_PRIVATE)
         db.keepSynced(true)
         
         val notificacion = NotificationCompat.Builder(this, CANAL_NOTIFICACIONES)
@@ -530,20 +559,17 @@ class EscuchaFirebaseService : android.app.Service() {
             }
         }
 
-        db.child("total_general").addListenerForSingleValueEvent(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                totalAnterior = snapshot.getValue(Double::class.java) ?: 0.0
-            }
-            override fun onCancelled(e: DatabaseError) {}
-        })
+        totalAnterior = prefs.getFloat("total_acumulado", 0f).toDouble()
 
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val nuevoTotal = snapshot.getValue(Double::class.java) ?: 0.0
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
-                    val fecha = formatoFecha.format(Date())
-                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal, "", "")
+                    val totalAcumulado = prefs.getFloat("total_acumulado", 0f).toDouble() + cuantoEntro
+                    prefs.edit().putFloat("total_acumulado", totalAcumulado.toFloat()).apply()
+                    db.child("total_general").setValue(totalAcumulado)
+                    
                     db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
                     
                     if(vozLista){
@@ -562,7 +588,7 @@ class EscuchaFirebaseService : android.app.Service() {
                     val aviso = NotificationCompat.Builder(this@EscuchaFirebaseService, CANAL_NOTIFICACIONES)
                         .setSmallIcon(android.R.drawable.ic_menu_info_details)
                         .setContentTitle("✅ INGRESO REGISTRADO")
-                        .setContentText("Entró moneda | Total: ${String.format("%.2f", nuevoTotal)} soles")
+                        .setContentText("Entró moneda | Total: ${String.format("%.2f", totalAcumulado)} soles")
                         .setPriority(NotificationCompat.PRIORITY_HIGH)
                         .setAutoCancel(true)
                         .setContentIntent(pendingIntent)
