@@ -201,25 +201,27 @@ class MainActivity : ComponentActivity() {
         })
     }
 
-    // ✅ ESCUCHA TICKETS — SOLO LEE, NO ESCRIBE NADA
+    // ✅ ESCUCHA TICKETS — SOLO LEE, MUESTRA Y BORRA DE FIREBASE
     private fun escucharTicketsNuevos() {
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (hijo in snapshot.children) {
                     val codigo = hijo.child("codigo").getValue(String::class.java) ?: ""
-                    val monto = hijo.child("monto").getValue(Double::class.java) ?: 0.0
-                    val fecha = hijo.child("fecha").getValue(String::class.java) ?: ""
+                    val monto = hijo.child("monto").getValue(Double::class.java) 
+                                ?: hijo.child("montoIngresado").getValue(Double::class.java) ?: 0.0
+                    val fecha = hijo.child("fecha").getValue(String::class.java) 
+                                ?: hijo.child("fechaHora").getValue(String::class.java) ?: ""
 
-                    // 🔒 FILTRO 1: Solo código de 6 dígitos
+                    // 🔒 FILTRO 1: Solo código de 6 dígitos numéricos
                     if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
 
                     // 🔒 FILTRO 2: Solo monto mayor a 0
                     if (monto <= 0.0) continue
 
-                    // 🔒 FILTRO 3: No repetir
+                    // 🔒 FILTRO 3: No repetir el mismo ticket
                     if (codigo == ultimoCodigoRecibido) continue
 
-                    // ✅ TICKET VÁLIDO — MOSTRAR SOLO EN LA APP
+                    // ✅ TICKET VÁLIDO — MOSTRAR EN LA APP
                     ultimoCodigoRecibido = codigo
                     val nuevoTicket = Movimiento(
                         fechaHora = fecha,
@@ -231,10 +233,10 @@ class MainActivity : ComponentActivity() {
                     )
                     historial = listOf(nuevoTicket) + historial
                     
-                    // ✅ ELIMINAR EL TICKET DE FIREBASE DESPUÉS DE LEERLO
+                    // ✅ BORRAR DE FIREBASE DESPUÉS DE LEERLO — NO SE ACUMULA NADA
                     hijo.ref.removeValue()
                     
-                    println("✅ TICKET LEÍDO Y ELIMINADO: $codigo — S/ $monto")
+                    println("✅ TICKET PROCESADO Y BORRADO: $codigo — S/ $monto")
                 }
             }
             override fun onCancelled(e: DatabaseError) {
@@ -301,7 +303,7 @@ class MainActivity : ComponentActivity() {
                     .padding(padding)
                     .padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Top
+                verticalArrangement = Arrangement.Top  // ✅ CORREGIDO: Arrangement en vez de Alignment
             ) {
                 Text("MONEDERO SMART", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp), color = Color.Black)
 
@@ -406,7 +408,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     Column(
                                         horizontalAlignment = Alignment.End,
-                                        verticalArrangement = Alignment.CenterVertically
+                                        verticalArrangement = Arrangement.Center
                                     ) {
                                         if(mov.codigo.isNotEmpty()){
                                             Text("CÓDIGO: ${mov.codigo}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
