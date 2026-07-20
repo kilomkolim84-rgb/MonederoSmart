@@ -169,7 +169,6 @@ class MainActivity : ComponentActivity() {
     private var distanciaRayos: String by mutableStateOf("-- km")
     private var totalAnterior: Double = 0.0
 
-    // ✅ FUNCIÓN CORREGIDA — NO FALLA
     private fun leerNumero(snapshot: DataSnapshot, defecto: Double = 0.0): Double {
         val valor = snapshot.getValue(Any::class.java)
         return when (valor) {
@@ -537,7 +536,6 @@ class EscuchaFirebaseService : android.app.Service() {
     private var tts: TextToSpeech? = null
     private var vozLista = false
 
-    // ✅ AQUÍ ESTABA EL ERROR — AHORA ESTÁ CORREGIDO
     private fun leerNumero(snapshot: DataSnapshot, defecto: Double = 0.0): Double {
         val valor = snapshot.getValue(Any::class.java)
         return when (valor) {
