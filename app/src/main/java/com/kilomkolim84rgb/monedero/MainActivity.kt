@@ -44,8 +44,7 @@ data class Movimiento(
     val detalle: String = "",
     val montoIngresado: Double = 0.0,
     val totalAcumulado: Double = 0.0,
-    val mac: String = "--",
-    val ip: String = "--",
+    val codigo: String = "",
     val alias: String = ""
 )
 
@@ -109,6 +108,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun generarCodigo(total: Double): String {
+        val entero = (total * 100).toInt()
+        return String.format("%06d", entero)
+    }
+
     private fun mostrarNotificacion(monto: Double, total: Double) {
         val intent = Intent(this, MainActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -160,8 +164,7 @@ class MainActivity : ComponentActivity() {
                             detalle = item.child("detalle").getValue(String::class.java) ?: "",
                             montoIngresado = item.child("montoIngresado").getValue(Double::class.java) ?: 0.0,
                             totalAcumulado = item.child("totalAcumulado").getValue(Double::class.java) ?: 0.0,
-                            mac = item.child("mac").getValue(String::class.java) ?: "--",
-                            ip = item.child("ip").getValue(String::class.java) ?: "--",
+                            codigo = item.child("codigo").getValue(String::class.java) ?: "",
                             alias = item.child("alias").getValue(String::class.java) ?: ""
                         )
                     )
@@ -189,7 +192,8 @@ class MainActivity : ComponentActivity() {
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
-                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal, alias = "")
+                    val codigoGenerado = generarCodigo(nuevoTotal)
+                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal, codigoGenerado, "")
                     historial = listOf(nuevoMov) + historial
                     db.child("historial").push().setValue(nuevoMov)
                     db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
@@ -422,8 +426,7 @@ class MainActivity : ComponentActivity() {
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Column(modifier = Modifier.width(100.dp)) {
-                                            Text("MAC: ${mov.mac}", fontSize = 10.sp, color = Color.Gray)
-                                            Text("IP: ${mov.ip}", fontSize = 10.sp, color = Color.Gray)
+                                            Text("CÓDIGO: ${mov.codigo}", fontSize = 10.sp, color = Color.Gray)
                                         }
                                         Card(
                                             modifier = Modifier.size(45.dp, 45.dp),
@@ -480,7 +483,7 @@ class MainActivity : ComponentActivity() {
 
     private fun vaciar() {
         val fecha = formatoFecha.format(Date())
-        val reg = Movimiento(fecha, "Monedero vaciado", 0.0, 0.0)
+        val reg = Movimiento(fecha, "Monedero vaciado", 0.0, 0.0, "")
         historial = listOf(reg) + historial
         db.child("historial").push().setValue(reg)
         db.child("total_general").setValue(0.0)
@@ -524,6 +527,11 @@ class EscuchaFirebaseService : android.app.Service() {
         }
     }
 
+    private fun generarCodigo(total: Double): String {
+        val entero = (total * 100).toInt()
+        return String.format("%06d", entero)
+    }
+
     override fun onCreate() {
         super.onCreate()
         db.keepSynced(true)
@@ -556,7 +564,8 @@ class EscuchaFirebaseService : android.app.Service() {
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
-                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal)
+                    val codigoGenerado = generarCodigo(nuevoTotal)
+                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal, codigoGenerado)
                     db.child("historial").push().setValue(nuevoMov)
                     db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
                     
