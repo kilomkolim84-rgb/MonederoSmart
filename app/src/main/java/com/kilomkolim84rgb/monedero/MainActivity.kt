@@ -5,7 +5,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
-import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
@@ -14,7 +13,6 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -26,7 +24,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,8 +32,6 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import android.Manifest
 import android.content.pm.PackageManager
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.qrcode.QRCodeWriter
 import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -50,7 +45,6 @@ data class Movimiento(
     val montoIngresado: Double = 0.0,
     val totalAcumulado: Double = 0.0,
     val codigo: String = "",
-    val qrTexto: String = "",
     val alias: String = ""
 )
 
@@ -59,6 +53,7 @@ class MainActivity : ComponentActivity() {
     private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
     private var tts: TextToSpeech? = null
     private var vozLista = false
+    private var ultimoCodigoRecibido = "" // EVITA DOBLES REGISTROS
 
     private val permisoNotificaciones = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -68,8 +63,8 @@ class MainActivity : ComponentActivity() {
             vozLista = estado == TextToSpeech.SUCCESS
             if(vozLista) {
                 tts?.language = Locale("es", "PE")
-                tts?.setPitch(1.3f)       // 🔊 Voz más aguda y clara
-                tts?.setSpeechRate(0.85f) // 🔊 Más lento, se escucha mejor
+                tts?.setPitch(1.3f)
+                tts?.setSpeechRate(0.85f)
             }
         }
 
@@ -105,7 +100,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // 🎤 PLING FUERTE Y CLARO — VOLUMEN SUBIDO
     private fun hablarPling() {
         if(vozLista) {
             tts?.speak("pling", TextToSpeech.QUEUE_FLUSH, null, null)
@@ -136,28 +130,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // 📷 GENERAR IMAGEN DE QR
-    private fun generarQR(texto: String, tamanio: Int = 120): Bitmap? {
-        if (texto.isBlank()) return null
-        return try {
-            val matriz = QRCodeWriter().encode(texto, BarcodeFormat.QR_CODE, tamanio, tamanio)
-            val ancho = matriz.width
-            val alto = matriz.height
-            val pixeles = IntArray(ancho * alto)
-            for (y in 0 until alto) {
-                val offset = y * ancho
-                for (x in 0 until ancho) {
-                    pixeles[offset + x] = if (matriz[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE
-                }
-            }
-            Bitmap.createBitmap(ancho, alto, Bitmap.Config.RGB_565).apply {
-                setPixels(pixeles, 0, ancho, 0, 0, ancho, alto)
-            }
-        } catch (e: Exception) {
-            null
-        }
-    }
-
     private var totalGeneral by mutableStateOf(0.0)
     private var ultimoMovimiento by mutableStateOf("-")
     private var historial by mutableStateOf(listOf<Movimiento>())
@@ -178,7 +150,6 @@ class MainActivity : ComponentActivity() {
                             montoIngresado = item.child("montoIngresado").getValue(Double::class.java) ?: 0.0,
                             totalAcumulado = item.child("totalAcumulado").getValue(Double::class.java) ?: 0.0,
                             codigo = item.child("codigo").getValue(String::class.java) ?: "",
-                            qrTexto = item.child("qr_texto").getValue(String::class.java) ?: "",
                             alias = item.child("alias").getValue(String::class.java) ?: ""
                         )
                     )
@@ -200,14 +171,13 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(e: DatabaseError) {}
         })
 
-        // ➕ DETECTA MONEDAS QUE ENTRAN Y DICE "PLING"
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val nuevoTotal = snapshot.getValue(Double::class.java) ?: 0.0
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
-                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal, "", "", "")
+                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal, "", "")
                     historial = listOf(nuevoMov) + historial
                     db.child("historial").push().setValue(nuevoMov)
                     db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
@@ -255,30 +225,30 @@ class MainActivity : ComponentActivity() {
         })
     }
 
-    // 📄 ESCUCHA TICKETS NUEVOS — LEE EL CÓDIGO REAL DEL ESP32, SIN INVENTAR NADA
+    // 📄 ESCUCHA TICKETS — EVITA DOBLES REGISTROS Y LEE SOLO LO REAL
     private fun escucharTicketsNuevos() {
         db.child("tickets/ultimo").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                // ✅ LEE DIRECTAMENTE LO QUE MANDÓ EL ESP32 — SIN CALCULAR NI INVENTAR NADA
                 val codigoReal = snapshot.child("codigo").getValue(String::class.java)
                 val monto = snapshot.child("monto").getValue(Double::class.java)
-                val qrTextoReal = snapshot.child("qr_texto").getValue(String::class.java)
                 
-                // ❌ SI NO HAY DATOS REALES, NO HACE NADA
                 if (codigoReal.isNullOrBlank() || monto == null) {
                     return
                 }
                 
-                // ✅ USA EXACTAMENTE EL MISMO CÓDIGO Y QR DEL TICKET
-                val fecha = formatoFecha.format(Date())
+                // ✅ EVITAR DOBLE REGISTRO — MISMO CÓDIGO NO SE REPITE
+                if (codigoReal == ultimoCodigoRecibido) {
+                    return
+                }
+                ultimoCodigoRecibido = codigoReal
                 
+                val fecha = formatoFecha.format(Date())
                 val nuevoTicket = Movimiento(
                     fechaHora = fecha,
                     detalle = "Ticket generado",
                     montoIngresado = monto,
                     totalAcumulado = totalGeneral,
-                    codigo = codigoReal,       // ✅ EL MISMO CÓDIGO DEL ESP32
-                    qrTexto = qrTextoReal ?: "", // ✅ EL MISMO QR DEL ESP32
+                    codigo = codigoReal,
                     alias = ""
                 )
                 historial = listOf(nuevoTicket) + historial
@@ -328,14 +298,14 @@ class MainActivity : ComponentActivity() {
 
     private fun formatearMonto(monto: Double): String {
         return when {
-            monto == 0.10 -> "+0.10 céntimos"
-            monto == 0.20 -> "+0.20 céntimos"
-            monto == 0.50 -> "+0.50 céntimos"
-            monto == 1.00 -> "+1 sol"
-            monto == 2.00 -> "+2 soles"
-            monto == 5.00 -> "+5 soles"
-            monto < 1.00 -> String.format("+%.2f céntimos", monto)
-            else -> String.format("+%.0f soles", monto)
+            monto == 0.10 -> "+0.10"
+            monto == 0.20 -> "+0.20"
+            monto == 0.50 -> "+0.50"
+            monto == 1.00 -> "+1.00"
+            monto == 2.00 -> "+2.00"
+            monto == 5.00 -> "+5.00"
+            monto < 1.00 -> String.format("+%.2f", monto)
+            else -> String.format("+%.0f", monto)
         }
     }
 
@@ -431,7 +401,6 @@ class MainActivity : ComponentActivity() {
                             val colorAlias = if(mov.alias.isNotEmpty()) Color(0xFF1976D2) else Color(0xFFFF9800)
                             val claveFirebase = mov.fechaHora.replace("/","-").replace(":","-").replace(" ","_")
                             val textoMonto = formatearMonto(mov.montoIngresado)
-                            val bitmapQR = remember(mov.qrTexto) { generarQR(mov.qrTexto) }
 
                             Card(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
@@ -468,36 +437,23 @@ class MainActivity : ComponentActivity() {
                                                 Text("⚠️ Vaciado", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Red)
                                             } else if(mov.codigo.isNotEmpty()) {
                                                 Text("Ticket creado", fontSize = 12.sp, color = Color(0xFF4CAF50))
-                                            } else {
-                                                Text(textoMonto, fontSize = 12.sp, color = Color.Black)
                                             }
                                         }
                                     }
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                    // ✅ QUITAMOS QR — PONEMOS MONTO GRANDE Y CÓDIGO
+                                    Column(
+                                        horizontalAlignment = Alignment.End,
+                                        verticalArrangement = Arrangement.Center
                                     ) {
-                                        Column(modifier = Modifier.width(100.dp)) {
-                                            if(mov.codigo.isNotEmpty()){
-                                                Text("CÓDIGO: ${mov.codigo}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
-                                            }
-                                        }
-                                        Card(
-                                            modifier = Modifier.size(45.dp, 45.dp),
-                                            shape = RoundedCornerShape(6.dp),
-                                            colors = CardDefaults.cardColors(Color(0xFFF5F5F5))
-                                        ) {
-                                            if (bitmapQR != null) {
-                                                Image(
-                                                    bitmap = bitmapQR.asImageBitmap(),
-                                                    contentDescription = "QR",
-                                                    modifier = Modifier.fillMaxSize()
-                                                )
-                                            } else {
-                                                Box(contentAlignment = Alignment.Center) { 
-                                                    Text("QR", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color.Gray) 
-                                                }
-                                            }
+                                        if(mov.codigo.isNotEmpty()){
+                                            Text("CÓDIGO: ${mov.codigo}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
+                                        } else if (mov.montoIngresado > 0) {
+                                            Text(
+                                                textoMonto,
+                                                fontSize = 22.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF2E7D32)
+                                            )
                                         }
                                     }
                                 }
@@ -595,7 +551,7 @@ class EscuchaFirebaseService : android.app.Service() {
             vozLista = estado == TextToSpeech.SUCCESS
             if(vozLista) {
                 tts?.language = Locale("es", "PE")
-                tts?.setPitch(1.3f)       // 🔊 MISMA CONFIGURACIÓN DE VOZ
+                tts?.setPitch(1.3f)
                 tts?.setSpeechRate(0.85f)
             }
         }
@@ -613,11 +569,10 @@ class EscuchaFirebaseService : android.app.Service() {
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
-                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal, "", "", "")
+                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal, "", "")
                     db.child("historial").push().setValue(nuevoMov)
                     db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
                     
-                    // 🎤 PLING FUERTE Y CLARO TAMBIÉN EN EL SERVICIO
                     if(vozLista){
                         tts?.speak("pling", TextToSpeech.QUEUE_FLUSH, null, null)
                     }
