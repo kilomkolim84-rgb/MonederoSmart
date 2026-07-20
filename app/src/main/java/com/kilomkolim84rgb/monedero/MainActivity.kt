@@ -42,7 +42,7 @@ const val CANAL_NOTIFICACIONES = "canal_monedero"
 data class Movimiento(
     val fechaHora: String = "",
     val detalle: String = "",
-    val montoIngresado: Double = 0.0,  // ✅ AHORA ES DECIMAL PARA CÉNTIMOS
+    val montoIngresado: Double = 0.0,
     val totalAcumulado: Double = 0.0,
     val mac: String = "--",
     val ip: String = "--",
@@ -95,16 +95,41 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun mostrarNotificacion(monto: Double, total: Double) {
-        val textoMonto = when(monto) {
-            0.10 -> "diez céntimos"
-            0.20 -> "veinte céntimos"
-            0.50 -> "cincuenta céntimos"
-            1.00 -> "un sol"
-            2.00 -> "dos soles"
-            5.00 -> "cinco soles"
-            else -> String.format("%.2f soles", monto)
+    // ✅ FUNCIÓN PRINCIPAL: CONVIERTE EL MONTO A PALABRAS CON "MONEY"
+    private fun montoAVoz(monto: Double): String {
+        val soles = monto.toInt()
+        val centimos = Math.round((monto - soles) * 100)
+
+        val parteSoles = when (soles) {
+            0 -> ""
+            1 -> "un sol"
+            2 -> "dos soles"
+            3 -> "tres soles"
+            4 -> "cuatro soles"
+            5 -> "cinco soles"
+            10 -> "diez soles"
+            else -> if (soles > 0) "$soles soles" else ""
         }
+
+        val parteCentimos = when (centimos) {
+            0 -> ""
+            10 -> "diez céntimos"
+            20 -> "veinte céntimos"
+            30 -> "treinta céntimos"
+            40 -> "cuarenta céntimos"
+            50 -> "cincuenta céntimos"
+            else -> "$centimos céntimos"
+        }
+
+        val y = if (soles > 0 && centimos > 0) " con " else ""
+
+        return "Money, $parteSoles$y$parteCentimos".trim()
+            .replace("Money, ", "Money, ")
+            .replace("  ", " ")
+    }
+
+    private fun mostrarNotificacion(monto: Double, total: Double) {
+        val textoMonto = montoAVoz(monto).removePrefix("Money, ")
 
         val intent = Intent(this, MainActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -134,16 +159,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun hablarMonto(monto: Double) {
-        val texto = when(monto) {
-            0.10 -> "diez céntimos"
-            0.20 -> "veinte céntimos"
-            0.50 -> "cincuenta céntimos"
-            1.00 -> "un sol"
-            2.00 -> "dos soles"
-            5.00 -> "cinco soles"
-            else -> String.format("%.2f soles", monto)
-        }
-        hablar(texto)
+        hablar(montoAVoz(monto))
     }
 
     private var totalGeneral by mutableStateOf(0.0)
@@ -242,7 +258,6 @@ class MainActivity : ComponentActivity() {
         })
     }
 
-    // ✅ REINICIO VERDADERO: BORRA DE FIREBASE
     private fun reiniciarSensores() {
         temperatura = "-- °C"
         voltaje = "-- V"
@@ -277,7 +292,6 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
-    // ✅ FORMATEA EL MONTO PARA MOSTRAR
     private fun formatearMonto(monto: Double): String {
         return when {
             monto == 0.10 -> "+0.10 céntimos"
@@ -515,6 +529,39 @@ class EscuchaFirebaseService : android.app.Service() {
     private var tts: TextToSpeech? = null
     private var vozLista = false
 
+    // ✅ MISMA FUNCIÓN PARA EL SERVICIO
+    private fun montoAVoz(monto: Double): String {
+        val soles = monto.toInt()
+        val centimos = Math.round((monto - soles) * 100)
+
+        val parteSoles = when (soles) {
+            0 -> ""
+            1 -> "un sol"
+            2 -> "dos soles"
+            3 -> "tres soles"
+            4 -> "cuatro soles"
+            5 -> "cinco soles"
+            10 -> "diez soles"
+            else -> if (soles > 0) "$soles soles" else ""
+        }
+
+        val parteCentimos = when (centimos) {
+            0 -> ""
+            10 -> "diez céntimos"
+            20 -> "veinte céntimos"
+            30 -> "treinta céntimos"
+            40 -> "cuarenta céntimos"
+            50 -> "cincuenta céntimos"
+            else -> "$centimos céntimos"
+        }
+
+        val y = if (soles > 0 && centimos > 0) " con " else ""
+
+        return "Money, $parteSoles$y$parteCentimos".trim()
+            .replace("Money, ", "Money, ")
+            .replace("  ", " ")
+    }
+
     override fun onCreate() {
         super.onCreate()
         db.keepSynced(true)
@@ -552,27 +599,11 @@ class EscuchaFirebaseService : android.app.Service() {
                     db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
                     
                     if(vozLista){
-                        val texto = when(cuantoEntro){
-                            0.10 -> "diez céntimos"
-                            0.20 -> "veinte céntimos"
-                            0.50 -> "cincuenta céntimos"
-                            1.00 -> "un sol"
-                            2.00 -> "dos soles"
-                            5.00 -> "cinco soles"
-                            else -> String.format("%.2f soles", cuantoEntro)
-                        }
+                        val texto = montoAVoz(cuantoEntro)
                         tts?.speak(texto, TextToSpeech.QUEUE_FLUSH, null, null)
                     }
                     
-                    val textoMonto = when(cuantoEntro) {
-                        0.10 -> "diez céntimos"
-                        0.20 -> "veinte céntimos"
-                        0.50 -> "cincuenta céntimos"
-                        1.00 -> "un sol"
-                        2.00 -> "dos soles"
-                        5.00 -> "cinco soles"
-                        else -> String.format("%.2f soles", cuantoEntro)
-                    }
+                    val textoMonto = montoAVoz(cuantoEntro).removePrefix("Money, ")
                     
                     val intent = Intent(this@EscuchaFirebaseService, MainActivity::class.java)
                     intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
