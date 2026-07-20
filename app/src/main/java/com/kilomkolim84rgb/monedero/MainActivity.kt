@@ -201,11 +201,14 @@ class MainActivity : ComponentActivity() {
         })
     }
 
-    // ✅ ESCUCHA TICKETS — SOLO LEE, MUESTRA Y BORRA DE FIREBASE
+    // ✅ ESCUCHA TICKETS — ESPERA 60 SEGUNDOS ANTES DE BORRAR
     private fun escucharTicketsNuevos() {
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (hijo in snapshot.children) {
+                    // Si ya fue leído, no volver a procesar
+                    if (hijo.child("leido_por_monedero").getValue(Boolean::class.java) == true) continue
+
                     val codigo = hijo.child("codigo").getValue(String::class.java) ?: ""
                     val monto = hijo.child("monto").getValue(Double::class.java) 
                                 ?: hijo.child("montoIngresado").getValue(Double::class.java) ?: 0.0
@@ -233,10 +236,16 @@ class MainActivity : ComponentActivity() {
                     )
                     historial = listOf(nuevoTicket) + historial
                     
-                    // ✅ BORRAR DE FIREBASE DESPUÉS DE LEERLO — NO SE ACUMULA NADA
-                    hijo.ref.removeValue()
+                    // ✅ MARCAR COMO LEÍDO — SIN BORRAR TODAVÍA
+                    hijo.ref.child("leido_por_monedero").setValue(true)
+
+                    // ✅ BORRAR DESPUÉS DE 1 MINUTO = 60,000 MILISEGUNDOS
+                    // Cada ticket cuenta su propio minuto desde que entró
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        hijo.ref.removeValue()
+                    }, 60000) // ⏳ 1 MINUTO COMPLETO — las dos apps lo leen tranquilas
                     
-                    println("✅ TICKET PROCESADO Y BORRADO: $codigo — S/ $monto")
+                    println("✅ TICKET LEÍDO — SE BORRARÁ EN 1 MINUTO: $codigo — S/ $monto")
                 }
             }
             override fun onCancelled(e: DatabaseError) {
@@ -303,7 +312,7 @@ class MainActivity : ComponentActivity() {
                     .padding(padding)
                     .padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Top  // ✅ CORREGIDO: Arrangement en vez de Alignment
+                verticalArrangement = Arrangement.Top
             ) {
                 Text("MONEDERO SMART", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp), color = Color.Black)
 
