@@ -174,6 +174,7 @@ class MainActivity : ComponentActivity() {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val nuevoTotalFirebase = snapshot.getValue(Double::class.java) ?: 0.0
                 
+                // ✅ SOLO SUMAR SI HAY INGRESO REAL — SIN REESCRIBIR FIREBASE = SIN BUCLE
                 if(nuevoTotalFirebase > totalAnterior){
                     val cuantoEntro = nuevoTotalFirebase - totalAnterior
                     val totalAcumulado = leerTotalGuardado() + cuantoEntro
@@ -185,7 +186,6 @@ class MainActivity : ComponentActivity() {
                     historial = listOf(nuevoMov) + historial
                     
                     db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
-                    db.child("total_general").setValue(totalAcumulado)
                     
                     hablarPling()
                     mostrarNotificacion(cuantoEntro, totalAcumulado)
@@ -557,7 +557,6 @@ class EscuchaFirebaseService : android.app.Service() {
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val totalAcumulado = prefs.getFloat("total_acumulado", 0f).toDouble() + cuantoEntro
                     prefs.edit().putFloat("total_acumulado", totalAcumulado.toFloat()).apply()
-                    db.child("total_general").setValue(totalAcumulado)
                     
                     db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
                     
