@@ -53,7 +53,7 @@ class MainActivity : ComponentActivity() {
     private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
     private var tts: TextToSpeech? = null
     private var vozLista = false
-    private var ultimoCodigoRecibido = "" // EVITA DOBLES REGISTROS
+    private var ultimoCodigoRecibido = ""
 
     private val permisoNotificaciones = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -225,39 +225,42 @@ class MainActivity : ComponentActivity() {
         })
     }
 
-    // 📄 ESCUCHA TICKETS — EVITA DOBLES REGISTROS Y LEE SOLO LO REAL
+    // ✅ ESCUCHA TICKETS DIRECTO A HISTORIAL — SIN "ultimo" — CON FILTROS
     private fun escucharTicketsNuevos() {
-        db.child("tickets/ultimo").addValueEventListener(object : ValueEventListener {
+        db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val codigoReal = snapshot.child("codigo").getValue(String::class.java)
-                val monto = snapshot.child("monto").getValue(Double::class.java)
-                
-                if (codigoReal.isNullOrBlank() || monto == null) {
-                    return
+                for (hijo in snapshot.children) {
+                    val codigo = hijo.child("codigo").getValue(String::class.java) ?: ""
+                    val monto = hijo.child("montoIngresado").getValue(Double::class.java) 
+                                ?: hijo.child("monto").getValue(Double::class.java) ?: 0.0
+                    val fecha = hijo.child("fechaHora").getValue(String::class.java) 
+                                ?: hijo.child("fecha").getValue(String::class.java) ?: ""
+
+                    // 🔒 FILTRO 1: Solo código de 6 dígitos numéricos
+                    if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
+
+                    // 🔒 FILTRO 2: Solo monto mayor a 0
+                    if (monto <= 0.0) continue
+
+                    // 🔒 FILTRO 3: No repetir ticket
+                    if (codigo == ultimoCodigoRecibido) continue
+
+                    // ✅ TICKET VÁLIDO — REGISTRAR
+                    ultimoCodigoRecibido = codigo
+                    val nuevoTicket = Movimiento(
+                        fechaHora = fecha,
+                        detalle = "Ticket generado",
+                        montoIngresado = monto,
+                        totalAcumulado = totalGeneral,
+                        codigo = codigo,
+                        alias = ""
+                    )
+                    historial = listOf(nuevoTicket) + historial
+                    println("✅ TICKET RECIBIDO: $codigo — S/ $monto")
                 }
-                
-                // ✅ EVITAR DOBLE REGISTRO — MISMO CÓDIGO NO SE REPITE
-                if (codigoReal == ultimoCodigoRecibido) {
-                    return
-                }
-                ultimoCodigoRecibido = codigoReal
-                
-                val fecha = formatoFecha.format(Date())
-                val nuevoTicket = Movimiento(
-                    fechaHora = fecha,
-                    detalle = "Ticket generado",
-                    montoIngresado = monto,
-                    totalAcumulado = totalGeneral,
-                    codigo = codigoReal,
-                    alias = ""
-                )
-                historial = listOf(nuevoTicket) + historial
-                db.child("historial").push().setValue(nuevoTicket)
-                
-                println("✅ TICKET RECIBIDO — CÓDIGO: $codigoReal")
             }
             override fun onCancelled(e: DatabaseError) {
-                Toast.makeText(this@MainActivity, "Error leyendo ticket", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "Error leyendo tickets", Toast.LENGTH_SHORT).show()
             }
         })
     }
@@ -369,22 +372,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Historial", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.Black)
-                    
-                    Button(
-                        onClick = { limpiarSoloHistorial() },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.height(30.dp)
-                    ) {
-                        Text("LIMPIAR", fontSize = 10.sp)
-                    }
-                }
+                Text("Historial", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.Black)
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Column(
@@ -440,10 +428,9 @@ class MainActivity : ComponentActivity() {
                                             }
                                         }
                                     }
-                                    // ✅ QUITAMOS QR — PONEMOS MONTO GRANDE Y CÓDIGO
                                     Column(
                                         horizontalAlignment = Alignment.End,
-                                        verticalArrangement = Arrangement.Center
+                                        verticalArrangement = Alignment.CenterVertically
                                     ) {
                                         if(mov.codigo.isNotEmpty()){
                                             Text("CÓDIGO: ${mov.codigo}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
@@ -501,22 +488,21 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
+    // ✅ VACIAR SIN GENERAR BASURA EN FIREBASE
     private fun vaciar() {
         val fecha = formatoFecha.format(Date())
         val reg = Movimiento(fecha, "Monedero vaciado", 0.0, 0.0, "")
         historial = listOf(reg) + historial
-        db.child("historial").push().setValue(reg)
+        
+        // ✅ SOLO REINICIA TOTALES — NO ESCRIBE NADA EN HISTORIAL
         db.child("total_general").setValue(0.0)
         db.child("ultimo_movimiento").setValue("Monedero vaciado")
+        
         totalAnterior = 0.0
+        totalGeneral = 0.0
+        
         hablarPling()
         Toast.makeText(this, "✅ Vaciado correctamente", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun limpiarSoloHistorial() {
-        db.child("historial").removeValue()
-        historial = emptyList()
-        Toast.makeText(this, "✅ Historial limpiado", Toast.LENGTH_SHORT).show()
     }
 
     override fun onDestroy() {
