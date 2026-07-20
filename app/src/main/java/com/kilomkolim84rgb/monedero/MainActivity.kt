@@ -95,7 +95,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ✅ FUNCIÓN DE VOZ: "Money, un sol con cincuenta céntimos"
     private fun montoAVoz(monto: Double): String {
         val soles = monto.toInt()
         val centimos = Math.round((monto - soles) * 100)
@@ -170,10 +169,10 @@ class MainActivity : ComponentActivity() {
     private var distanciaRayos by mutableStateOf("-- km")
     private var totalAnterior = 0.0
 
-    // ✅ FUNCIÓN SEGURA: Lee cualquier número de Firebase
-    private fun leerNumero(snapshot: DataSnapshot, valorPorDefecto: Double = 0.0): Double {
-        val valor = snapshot.getValue(Number::class.java) ?: return valorPorDefecto
-        return valor.toDouble()
+    // ✅ FUNCIÓN SEGURA: LEE CUALQUIER NÚMERO DE FIREBASE — Int, Long o Double
+    private fun leerDoble(snapshot: DataSnapshot, defecto: Double = 0.0): Double {
+        val num = snapshot.getValue(Number::class.java) ?: return defecto
+        return num.toDouble()
     }
 
     private fun cargarHistorialGuardado() {
@@ -185,8 +184,8 @@ class MainActivity : ComponentActivity() {
                         Movimiento(
                             fechaHora = item.child("fechaHora").getValue(String::class.java) ?: "",
                             detalle = item.child("detalle").getValue(String::class.java) ?: "",
-                            montoIngresado = leerNumero(item.child("montoIngresado")),
-                            totalAcumulado = leerNumero(item.child("totalAcumulado")),
+                            montoIngresado = leerDoble(item.child("montoIngresado")),
+                            totalAcumulado = leerDoble(item.child("totalAcumulado")),
                             mac = item.child("mac").getValue(String::class.java) ?: "--",
                             ip = item.child("ip").getValue(String::class.java) ?: "--",
                             alias = item.child("alias").getValue(String::class.java) ?: ""
@@ -204,7 +203,7 @@ class MainActivity : ComponentActivity() {
         
         db.child("total_general").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                totalAnterior = leerNumero(snapshot)
+                totalAnterior = leerDoble(snapshot)
                 totalGeneral = totalAnterior
             }
             override fun onCancelled(e: DatabaseError) {}
@@ -212,7 +211,7 @@ class MainActivity : ComponentActivity() {
 
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val nuevoTotal = leerNumero(snapshot)
+                val nuevoTotal = leerDoble(snapshot)
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
@@ -241,7 +240,7 @@ class MainActivity : ComponentActivity() {
 
         db.child("sensores/temperatura").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(s: DataSnapshot) {
-                val v = leerNumero(s, Double.NaN)
+                val v = leerDoble(s, Double.NaN)
                 temperatura = if(!v.isNaN()) String.format("%.1f °C", v) else "-- °C"
             }
             override fun onCancelled(e: DatabaseError) {}
@@ -249,7 +248,7 @@ class MainActivity : ComponentActivity() {
 
         db.child("sensores/voltaje").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(s: DataSnapshot) {
-                val v = leerNumero(s, Double.NaN)
+                val v = leerDoble(s, Double.NaN)
                 voltaje = if(!v.isNaN()) String.format("%.1f V", v) else "-- V"
             }
             override fun onCancelled(e: DatabaseError) {}
@@ -257,7 +256,7 @@ class MainActivity : ComponentActivity() {
 
         db.child("sensores/rayos_distancia").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(s: DataSnapshot) {
-                val v = leerNumero(s, Double.NaN)
+                val v = leerDoble(s, Double.NaN)
                 distanciaRayos = if(!v.isNaN()) String.format("%.0f km", v) else "-- km"
             }
             override fun onCancelled(e: DatabaseError) {}
@@ -535,13 +534,12 @@ class EscuchaFirebaseService : android.app.Service() {
     private var tts: TextToSpeech? = null
     private var vozLista = false
 
-    // ✅ FUNCIÓN SEGURA: Lee cualquier número de Firebase
-    private fun leerNumero(snapshot: DataSnapshot, valorPorDefecto: Double = 0.0): Double {
-        val valor = snapshot.getValue(Number::class.java) ?: return valorPorDefecto
-        return valor.toDouble()
+    // ✅ MISMA FUNCIÓN SEGURA PARA EL SERVICIO
+    private fun leerDoble(snapshot: DataSnapshot, defecto: Double = 0.0): Double {
+        val num = snapshot.getValue(Number::class.java) ?: return defecto
+        return num.toDouble()
     }
 
-    // ✅ MISMA FUNCIÓN DE VOZ PARA EL SERVICIO
     private fun montoAVoz(monto: Double): String {
         val soles = monto.toInt()
         val centimos = Math.round((monto - soles) * 100)
@@ -595,14 +593,14 @@ class EscuchaFirebaseService : android.app.Service() {
 
         db.child("total_general").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                totalAnterior = leerNumero(snapshot)
+                totalAnterior = leerDoble(snapshot)
             }
             override fun onCancelled(e: DatabaseError) {}
         })
 
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val nuevoTotal = leerNumero(snapshot)
+                val nuevoTotal = leerDoble(snapshot)
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
