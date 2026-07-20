@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
@@ -13,6 +14,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -24,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,6 +35,8 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import android.Manifest
 import android.content.pm.PackageManager
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.qrcode.QRCodeWriter
 import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -45,6 +50,7 @@ data class Movimiento(
     val montoIngresado: Double = 0.0,
     val totalAcumulado: Double = 0.0,
     val codigo: String = "",
+    val qrTexto: String = "",
     val alias: String = ""
 )
 
@@ -69,6 +75,7 @@ class MainActivity : ComponentActivity() {
         
         setContent { PantallaPrincipal() }
         escucharDatos()
+        escucharTicketsNuevos()
         cargarHistorialGuardado()
     }
 
@@ -94,23 +101,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun textoMonto(monto: Double): String {
-        return when(monto) {
-            0.10 -> "diez céntimos"
-            0.20 -> "veinte céntimos"
-            0.50 -> "cincuenta céntimos"
-            0.60 -> "sesenta céntimos"
-            0.70 -> "setenta céntimos"
-            1.00 -> "un sol"
-            2.00 -> "dos soles"
-            5.00 -> "cinco soles"
-            else -> String.format("%.2f soles", monto)
-        }
-    }
-
-    private fun generarCodigo(total: Double): String {
-        val entero = (total * 100).toInt()
-        return String.format("%06d", entero)
+    // 🎤 AHORA SOLO DICE "PLING" — SIN NÚMEROS NI CÉNTIMOS
+    private fun hablarPling() {
+        if(vozLista) tts?.speak("pling", TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
     private fun mostrarNotificacion(monto: Double, total: Double) {
@@ -126,7 +119,7 @@ class MainActivity : ComponentActivity() {
         val aviso = NotificationCompat.Builder(this, CANAL_NOTIFICACIONES)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("✅ INGRESO REGISTRADO")
-            .setContentText("Entró ${textoMonto(monto)} | Total: ${String.format("%.2f", total)} soles")
+            .setContentText("Entró moneda | Total: ${String.format("%.2f", total)} soles")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
@@ -137,12 +130,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun hablar(texto: String) {
-        if(vozLista) tts?.speak(texto, TextToSpeech.QUEUE_FLUSH, null, null)
-    }
-
-    private fun hablarMonto(monto: Double) {
-        hablar(textoMonto(monto))
+    // 📷 GENERAR IMAGEN DE QR
+    private fun generarQR(texto: String, tamanio: Int = 120): Bitmap? {
+        if (texto.isBlank()) return null
+        return try {
+            val matriz = QRCodeWriter().encode(texto, BarcodeFormat.QR_CODE, tamanio, tamanio)
+            val ancho = matriz.width
+            val alto = matriz.height
+            val pixeles = IntArray(ancho * alto)
+            for (y in 0 until alto) {
+                val offset = y * ancho
+                for (x in 0 until ancho) {
+                    pixeles[offset + x] = if (matriz[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE
+                }
+            }
+            Bitmap.createBitmap(ancho, alto, Bitmap.Config.RGB_565).apply {
+                setPixels(pixeles, 0, ancho, 0, 0, ancho, alto)
+            }
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private var totalGeneral by mutableStateOf(0.0)
@@ -165,6 +172,7 @@ class MainActivity : ComponentActivity() {
                             montoIngresado = item.child("montoIngresado").getValue(Double::class.java) ?: 0.0,
                             totalAcumulado = item.child("totalAcumulado").getValue(Double::class.java) ?: 0.0,
                             codigo = item.child("codigo").getValue(String::class.java) ?: "",
+                            qrTexto = item.child("qr_texto").getValue(String::class.java) ?: "",
                             alias = item.child("alias").getValue(String::class.java) ?: ""
                         )
                     )
@@ -186,19 +194,19 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(e: DatabaseError) {}
         })
 
+        // ➕ DETECTA MONEDAS QUE ENTRAN Y DICE "PLING"
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val nuevoTotal = snapshot.getValue(Double::class.java) ?: 0.0
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
-                    val codigoGenerado = generarCodigo(nuevoTotal)
-                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal, codigoGenerado, "")
+                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal, "", "", "")
                     historial = listOf(nuevoMov) + historial
                     db.child("historial").push().setValue(nuevoMov)
                     db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
                     
-                    hablarMonto(cuantoEntro)
+                    hablarPling()  // 🎤 SOLO DICE "PLING"
                     mostrarNotificacion(cuantoEntro, nuevoTotal)
                 }
                 totalAnterior = nuevoTotal
@@ -236,6 +244,31 @@ class MainActivity : ComponentActivity() {
             override fun onDataChange(s: DataSnapshot) {
                 val v = s.getValue(Double::class.java)
                 distanciaRayos = if(v!=null) String.format("%.0f km", v) else "-- km"
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        })
+    }
+
+    // 📄 ESCUCHA TICKETS NUEVOS DEL ESP32 — MUESTRA CÓDIGO + QR REAL
+    private fun escucharTicketsNuevos() {
+        db.child("tickets/ultimo").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val codigo = snapshot.child("codigo").getValue(String::class.java) ?: return
+                val monto = snapshot.child("monto").getValue(Double::class.java) ?: return
+                val qrTexto = snapshot.child("qr_texto").getValue(String::class.java) ?: ""
+                val fecha = formatoFecha.format(Date())
+                
+                val nuevoTicket = Movimiento(
+                    fechaHora = fecha,
+                    detalle = "Ticket generado",
+                    montoIngresado = monto,
+                    totalAcumulado = totalGeneral,
+                    codigo = codigo,
+                    qrTexto = qrTexto,
+                    alias = ""
+                )
+                historial = listOf(nuevoTicket) + historial
+                db.child("historial").push().setValue(nuevoTicket)
             }
             override fun onCancelled(e: DatabaseError) {}
         })
@@ -280,8 +313,6 @@ class MainActivity : ComponentActivity() {
             monto == 0.10 -> "+0.10 céntimos"
             monto == 0.20 -> "+0.20 céntimos"
             monto == 0.50 -> "+0.50 céntimos"
-            monto == 0.60 -> "+0.60 céntimos"
-            monto == 0.70 -> "+0.70 céntimos"
             monto == 1.00 -> "+1 sol"
             monto == 2.00 -> "+2 soles"
             monto == 5.00 -> "+5 soles"
@@ -382,6 +413,7 @@ class MainActivity : ComponentActivity() {
                             val colorAlias = if(mov.alias.isNotEmpty()) Color(0xFF1976D2) else Color(0xFFFF9800)
                             val claveFirebase = mov.fechaHora.replace("/","-").replace(":","-").replace(" ","_")
                             val textoMonto = formatearMonto(mov.montoIngresado)
+                            val bitmapQR = remember(mov.qrTexto) { generarQR(mov.qrTexto) }
 
                             Card(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
@@ -416,6 +448,8 @@ class MainActivity : ComponentActivity() {
                                             Text(mov.fechaHora, fontSize = 11.sp, color = Color.Gray)
                                             if(mov.detalle == "Monedero vaciado"){
                                                 Text("⚠️ Vaciado", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Red)
+                                            } else if(mov.codigo.isNotEmpty()) {
+                                                Text("Ticket creado", fontSize = 12.sp, color = Color(0xFF4CAF50))
                                             } else {
                                                 Text(textoMonto, fontSize = 12.sp, color = Color.Black)
                                             }
@@ -426,14 +460,26 @@ class MainActivity : ComponentActivity() {
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Column(modifier = Modifier.width(100.dp)) {
-                                            Text("CÓDIGO: ${mov.codigo}", fontSize = 10.sp, color = Color.Gray)
+                                            if(mov.codigo.isNotEmpty()){
+                                                Text("CÓDIGO: ${mov.codigo}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
+                                            }
                                         }
                                         Card(
                                             modifier = Modifier.size(45.dp, 45.dp),
                                             shape = RoundedCornerShape(6.dp),
                                             colors = CardDefaults.cardColors(Color(0xFFF5F5F5))
                                         ) {
-                                            Box(contentAlignment = Alignment.Center) { Text("QR", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color.Black) }
+                                            if (bitmapQR != null) {
+                                                Image(
+                                                    bitmap = bitmapQR.asImageBitmap(),
+                                                    contentDescription = "QR",
+                                                    modifier = Modifier.fillMaxSize()
+                                                )
+                                            } else {
+                                                Box(contentAlignment = Alignment.Center) { 
+                                                    Text("QR", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color.Gray) 
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -489,7 +535,7 @@ class MainActivity : ComponentActivity() {
         db.child("total_general").setValue(0.0)
         db.child("ultimo_movimiento").setValue("Monedero vaciado")
         totalAnterior = 0.0
-        hablar("Monedero vaciado")
+        hablarPling()
         Toast.makeText(this, "✅ Vaciado correctamente", Toast.LENGTH_SHORT).show()
     }
 
@@ -512,25 +558,6 @@ class EscuchaFirebaseService : android.app.Service() {
     private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
     private var tts: TextToSpeech? = null
     private var vozLista = false
-
-    private fun textoMonto(monto: Double): String {
-        return when(monto) {
-            0.10 -> "diez céntimos"
-            0.20 -> "veinte céntimos"
-            0.50 -> "cincuenta céntimos"
-            0.60 -> "sesenta céntimos"
-            0.70 -> "setenta céntimos"
-            1.00 -> "un sol"
-            2.00 -> "dos soles"
-            5.00 -> "cinco soles"
-            else -> String.format("%.2f soles", monto)
-        }
-    }
-
-    private fun generarCodigo(total: Double): String {
-        val entero = (total * 100).toInt()
-        return String.format("%06d", entero)
-    }
 
     override fun onCreate() {
         super.onCreate()
@@ -564,13 +591,13 @@ class EscuchaFirebaseService : android.app.Service() {
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val fecha = formatoFecha.format(Date())
-                    val codigoGenerado = generarCodigo(nuevoTotal)
-                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal, codigoGenerado)
+                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, nuevoTotal, "", "", "")
                     db.child("historial").push().setValue(nuevoMov)
                     db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
                     
+                    // 🎤 SOLO DICE "PLING"
                     if(vozLista){
-                        tts?.speak(textoMonto(cuantoEntro), TextToSpeech.QUEUE_FLUSH, null, null)
+                        tts?.speak("pling", TextToSpeech.QUEUE_FLUSH, null, null)
                     }
                     
                     val intent = Intent(this@EscuchaFirebaseService, MainActivity::class.java)
@@ -585,7 +612,7 @@ class EscuchaFirebaseService : android.app.Service() {
                     val aviso = NotificationCompat.Builder(this@EscuchaFirebaseService, CANAL_NOTIFICACIONES)
                         .setSmallIcon(android.R.drawable.ic_menu_info_details)
                         .setContentTitle("✅ INGRESO REGISTRADO")
-                        .setContentText("Entró ${textoMonto(cuantoEntro)} | Total: ${String.format("%.2f", nuevoTotal)} soles")
+                        .setContentText("Entró moneda | Total: ${String.format("%.2f", nuevoTotal)} soles")
                         .setPriority(NotificationCompat.PRIORITY_HIGH)
                         .setAutoCancel(true)
                         .setContentIntent(pendingIntent)
