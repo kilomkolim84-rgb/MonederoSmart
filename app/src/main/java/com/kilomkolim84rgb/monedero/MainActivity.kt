@@ -56,7 +56,7 @@ class MainActivity : ComponentActivity() {
     private var tts: TextToSpeech? = null
     private var vozLista = false
     private var ultimoCodigoRecibido = ""
-    
+
     // ✅ GUARDADO PERMANENTE EN EL CELULAR
     private lateinit var prefs: SharedPreferences
     private val TOTAL_GUARDADO = "total_acumulado"
@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        prefs = getSharedPreferences("MonederoPrefs", Context.MODE_PRIVATE)
+        prefs = getSharedPreferences("MonederoPrefs", Context.MODE_PRIVATE) // ✅ INICIALIZAR
         
         tts = TextToSpeech(this) { estado ->
             vozLista = estado == TextToSpeech.SUCCESS
@@ -83,6 +83,16 @@ class MainActivity : ComponentActivity() {
         setContent { PantallaPrincipal() }
         escucharDatos()
         escucharTicketsNuevos()
+    }
+
+    // ✅ LEER TOTAL GUARDADO
+    private fun leerTotalGuardado(): Double {
+        return prefs.getFloat(TOTAL_GUARDADO, 0f).toDouble()
+    }
+
+    // ✅ GUARDAR TOTAL
+    private fun guardarTotal(total: Double) {
+        prefs.edit().putFloat(TOTAL_GUARDADO, total.toFloat()).apply()
     }
 
     private fun crearCanalNotificaciones() {
@@ -144,34 +154,23 @@ class MainActivity : ComponentActivity() {
     private var temperatura by mutableStateOf("-- °C")
     private var voltaje by mutableStateOf("-- V")
     private var distanciaRayos by mutableStateOf("-- km")
-    private var totalAnteriorFirebase = 0.0
-
-    // ✅ LEER TOTAL GUARDADO AL ABRIR LA APP
-    private fun leerTotalGuardado(): Double {
-        return prefs.getFloat(TOTAL_GUARDADO, 0f).toDouble()
-    }
-
-    // ✅ GUARDAR TOTAL EN EL CELULAR
-    private fun guardarTotal(total: Double) {
-        prefs.edit().putFloat(TOTAL_GUARDADO, total.toFloat()).apply()
-    }
+    private var totalAnterior = 0.0
 
     private fun escucharDatos() {
         db.keepSynced(true)
         
-        // Cargar total guardado al iniciar
+        // ✅ AL ABRIR: CARGAR LO GUARDADO
         totalGeneral = leerTotalGuardado()
-        totalAnteriorFirebase = totalGeneral
+        totalAnterior = totalGeneral
 
         db.child("total_general").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val valorFirebase = snapshot.getValue(Double::class.java) ?: 0.0
-                // Si Firebase tiene más que lo guardado, usar ese
                 if(valorFirebase > totalGeneral) {
                     totalGeneral = valorFirebase
                     guardarTotal(totalGeneral)
                 }
-                totalAnteriorFirebase = totalGeneral
+                totalAnterior = totalGeneral
             }
             override fun onCancelled(e: DatabaseError) {}
         })
@@ -180,11 +179,11 @@ class MainActivity : ComponentActivity() {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val nuevoTotalFirebase = snapshot.getValue(Double::class.java) ?: 0.0
                 
-                // ✅ SOLO SUMAR SI HAY UN NUEVO INGRESO
-                if(nuevoTotalFirebase > totalAnteriorFirebase){
-                    val cuantoEntro = nuevoTotalFirebase - totalAnteriorFirebase
+                // ✅ SOLO SUMAR SI HAY INGRESO NUEVO
+                if(nuevoTotalFirebase > totalAnterior){
+                    val cuantoEntro = nuevoTotalFirebase - totalAnterior
                     
-                    // ✅ SUMAR AL TOTAL QUE YA ESTÁ GUARDADO
+                    // ✅ SUMAR A LO QUE YA ESTÁ GUARDADO
                     val totalAcumulado = leerTotalGuardado() + cuantoEntro
                     totalGeneral = totalAcumulado
                     guardarTotal(totalAcumulado)
@@ -199,7 +198,7 @@ class MainActivity : ComponentActivity() {
                     hablarPling()
                     mostrarNotificacion(cuantoEntro, totalAcumulado)
                 }
-                totalAnteriorFirebase = nuevoTotalFirebase
+                totalAnterior = nuevoTotalFirebase
             }
             override fun onCancelled(e: DatabaseError) {
                 Toast.makeText(this@MainActivity, "Sin conexión", Toast.LENGTH_SHORT).show()
@@ -444,7 +443,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     Column(
                                         horizontalAlignment = Alignment.End,
-                                        verticalArrangement = Alignment.CenterVertically
+                                        verticalArrangement = Alignment.Center
                                     ) {
                                         if(mov.codigo.isNotEmpty()){
                                             Text("CÓDIGO: ${mov.codigo}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
@@ -511,9 +510,9 @@ class MainActivity : ComponentActivity() {
         db.child("total_general").setValue(0.0)
         db.child("ultimo_movimiento").setValue("Monedero vaciado")
         
+        totalAnterior = 0.0
         totalGeneral = 0.0
         guardarTotal(0.0) // ✅ GUARDA 0 PERMANENTE
-        totalAnteriorFirebase = 0.0
         ultimoCodigoRecibido = ""
         
         hablarPling()
@@ -537,7 +536,7 @@ class EscuchaFirebaseService : android.app.Service() {
 
     override fun onCreate() {
         super.onCreate()
-        prefs = getSharedPreferences("MonederoPrefs", Context.MODE_PRIVATE)
+        prefs = getSharedPreferences("MonederoPrefs", Context.MODE_PRIVATE) // ✅ INICIALIZAR
         db.keepSynced(true)
         
         val notificacion = NotificationCompat.Builder(this, CANAL_NOTIFICACIONES)
@@ -559,7 +558,7 @@ class EscuchaFirebaseService : android.app.Service() {
             }
         }
 
-        totalAnterior = prefs.getFloat("total_acumulado", 0f).toDouble()
+        totalAnterior = prefs.getFloat("total_acumulado", 0f).toDouble() // ✅ CARGAR GUARDADO
 
         db.child("total_general").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -567,7 +566,7 @@ class EscuchaFirebaseService : android.app.Service() {
                 if(nuevoTotal > totalAnterior){
                     val cuantoEntro = nuevoTotal - totalAnterior
                     val totalAcumulado = prefs.getFloat("total_acumulado", 0f).toDouble() + cuantoEntro
-                    prefs.edit().putFloat("total_acumulado", totalAcumulado.toFloat()).apply()
+                    prefs.edit().putFloat("total_acumulado", totalAcumulado.toFloat()).apply() // ✅ GUARDAR
                     db.child("total_general").setValue(totalAcumulado)
                     
                     db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
