@@ -60,6 +60,12 @@ data class Movimiento(
     val alias: String = ""
 )
 
+data class SensorLectura(
+    val voltaje: Double = 0.0,
+    val temperatura: Double = 0.0,
+    val fechaHora: String = ""
+)
+
 // ==============================================
 // 🔵 SERVICIO QUE SE QUEDA ESCUCHANDO SIEMPRE
 // ==============================================
@@ -69,6 +75,7 @@ class MonederoServicio : Service() {
     private lateinit var prefs: SharedPreferences
     private val TOTAL_GUARDADO = "total_acumulado"
     private var escuchando: ValueEventListener? = null
+    private var sensoresEscucha: ValueEventListener? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -88,7 +95,7 @@ class MonederoServicio : Service() {
         crearCanalServicio()
         val notificacion = NotificationCompat.Builder(this, CANAL_SERVICIO)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
-            .setContentTitle("Monedero Paoyhan")
+            .setContentTitle("MONEDERO PAOYHAN")
             .setContentText("✅ Escuchando tickets...")
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
@@ -96,6 +103,7 @@ class MonederoServicio : Service() {
         startForeground(ID_NOTIFICACION_SERVICIO, notificacion)
 
         escucharFirebase()
+        escucharSensores()
     }
 
     private fun crearCanalServicio() {
@@ -150,6 +158,26 @@ class MonederoServicio : Service() {
         db.child("historial").addValueEventListener(escuchando!!)
     }
 
+    // ✅ ESCUCHAR SENSORES (SOLO LECTURA, NO BLOQUEA NADA)
+    private fun escucharSensores() {
+        val db = FirebaseDatabase.getInstance().reference
+        sensoresEscucha = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val voltaje = snapshot.child("sensores/voltaje").getValue(Double::class.java) ?: 0.0
+                val temperatura = snapshot.child("sensores/temperatura").getValue(Double::class.java) ?: 0.0
+                val fechaHora = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE")).format(Date())
+                
+                prefs.edit()
+                    .putFloat("ultimo_voltaje", voltaje.toFloat())
+                    .putFloat("ultima_temperatura", temperatura.toFloat())
+                    .putString("ultima_lectura_sensores", fechaHora)
+                    .apply()
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        }
+        db.child("sensores").addValueEventListener(sensoresEscucha!!)
+    }
+
     private fun mostrarNotificacion(monto: Double, total: Double) {
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -177,6 +205,9 @@ class MonederoServicio : Service() {
         escuchando?.let {
             FirebaseDatabase.getInstance().reference.child("historial").removeEventListener(it)
         }
+        sensoresEscucha?.let {
+            FirebaseDatabase.getInstance().reference.child("sensores").removeEventListener(it)
+        }
         tts?.stop()
         tts?.shutdown()
     }
@@ -196,6 +227,9 @@ class MainActivity : ComponentActivity() {
 
     private var totalGeneral by mutableStateOf(0.0)
     private var historial by mutableStateOf(listOf<Movimiento>())
+    private var voltaje by mutableStateOf(0.0)
+    private var temperatura by mutableStateOf(0.0)
+    private var ultimaLecturaSensores by mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -203,6 +237,7 @@ class MainActivity : ComponentActivity() {
         prefs = getSharedPreferences("MonederoPrefs", Context.MODE_PRIVATE)
         totalGeneral = leerTotalGuardado()
         cargarHistorialGuardado()
+        cargarSensoresGuardados()
         
         try {
             FirebaseApp.initializeApp(this)
@@ -256,6 +291,22 @@ class MainActivity : ComponentActivity() {
             }
             override fun onCancelled(e: DatabaseError) {}
         })
+
+        // ✅ ESCUCHAR SENSORES PARA ACTUALIZAR PANTALLA
+        db.child("sensores").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                voltaje = snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0
+                temperatura = snapshot.child("temperatura").getValue(Double::class.java) ?: 0.0
+                ultimaLecturaSensores = SimpleDateFormat("dd/MM HH:mm", Locale("es", "PE")).format(Date())
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        })
+    }
+
+    private fun cargarSensoresGuardados() {
+        voltaje = prefs.getFloat("ultimo_voltaje", 0f).toDouble()
+        temperatura = prefs.getFloat("ultima_temperatura", 0f).toDouble()
+        ultimaLecturaSensores = prefs.getString("ultima_lectura_sensores", "") ?: ""
     }
 
     private fun leerTotalGuardado(): Double = prefs.getFloat(TOTAL_GUARDADO, 0f).toDouble()
@@ -391,12 +442,41 @@ class MainActivity : ComponentActivity() {
     fun PantallaPrincipal() {
         Scaffold(modifier = Modifier.fillMaxSize(), containerColor = Color.White) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("MONEDERO PAOYHAN", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp))
+                Text("MONEDERO PAOYHAN", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
+
+                // ✅ 3 ÍCONOS ARRIBA: MONTO • VOLTAJE • TEMPERATURA
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFCDFF33))) {
+                        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Text("💰 MONTO", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(String.format("%.2f", totalGeneral), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFEB3B))) {
+                        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Text("⚡ VOLTAJE", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(if (voltaje > 0) String.format("%.1f V", voltaje) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFCC80))) {
+                        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Text("🌡️ TEMP", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(if (temperatura > -100) String.format("%.1f °C", temperatura) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                if (ultimaLecturaSensores.isNotEmpty()) {
+                    Text("Última lectura: $ultimaLecturaSensores", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(Color(0xFFCDFF33))) {
                     Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("TOTAL", fontSize = 14.sp)
+                        Text("TOTAL ACUMULADO", fontSize = 14.sp)
                         Text(String.format("%.2f SOLES", totalGeneral), fontSize = 36.sp, fontWeight = FontWeight.Bold)
                     }
                 }
@@ -414,7 +494,7 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(12.dp))
                 Text("Historial", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifierifier = Modifier.height(6.dp))
 
                 Column(modifier = Modifier.fillMaxWidth().weight(1f).background(Color(0xFFE0F7FF), RoundedCornerShape(12.dp)).padding(8.dp)) {
                     LazyColumn(modifier = Modifier.fillMaxWidth()) {
