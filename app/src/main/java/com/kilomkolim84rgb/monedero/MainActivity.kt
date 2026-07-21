@@ -60,12 +60,6 @@ data class Movimiento(
     val alias: String = ""
 )
 
-data class SensorLectura(
-    val voltaje: Double = 0.0,
-    val temperatura: Double = 0.0,
-    val fechaHora: String = ""
-)
-
 // ==============================================
 // 🔵 SERVICIO QUE SE QUEDA ESCUCHANDO SIEMPRE
 // ==============================================
@@ -81,7 +75,6 @@ class MonederoServicio : Service() {
         super.onCreate()
         prefs = getSharedPreferences("MonederoPrefs", Context.MODE_PRIVATE)
         
-        // ✅ INICIAR TTS
         tts = TextToSpeech(this) { estado ->
             vozLista = estado == TextToSpeech.SUCCESS
             if(vozLista) {
@@ -91,7 +84,6 @@ class MonederoServicio : Service() {
             }
         }
 
-        // ✅ NOTIFICACIÓN PARA QUE ANDROID NO MATE EL SERVICIO
         crearCanalServicio()
         val notificacion = NotificationCompat.Builder(this, CANAL_SERVICIO)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
@@ -132,21 +124,16 @@ class MonederoServicio : Service() {
                         if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
                         if (monto <= 0.0) continue
 
-                        // ✅ MARCAR COMO LEÍDO
                         nivel2.ref.child("leido_por_monedero").setValue(true)
 
-                        // ✅ SUMAR AL TOTAL
                         val totalActual = prefs.getFloat(TOTAL_GUARDADO, 0f).toDouble()
                         val nuevoTotal = totalActual + monto
                         prefs.edit().putFloat(TOTAL_GUARDADO, nuevoTotal.toFloat()).apply()
 
-                        // ✅ SONAR "plin"
                         if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
 
-                        // ✅ MOSTRAR NOTIFICACIÓN
                         mostrarNotificacion(monto, nuevoTotal)
 
-                        // ✅ BORRAR SI LAS DOS APPS LEERON
                         val leidoTicket = nivel2.child("leido_por_ticket").getValue(Boolean::class.java) ?: false
                         if (leidoTicket) nivel2.ref.removeValue()
                     }
@@ -158,7 +145,6 @@ class MonederoServicio : Service() {
         db.child("historial").addValueEventListener(escuchando!!)
     }
 
-    // ✅ ESCUCHAR SENSORES (SOLO LECTURA, NO BLOQUEA NADA)
     private fun escucharSensores() {
         val db = FirebaseDatabase.getInstance().reference
         sensoresEscucha = object : ValueEventListener {
@@ -246,7 +232,6 @@ class MainActivity : ComponentActivity() {
         val db = FirebaseDatabase.getInstance().reference
         db.keepSynced(true)
         
-        // ✅ INICIAR SERVICIO EN SEGUNDO PLANO
         startForegroundService(Intent(this, MonederoServicio::class.java))
 
         tts = TextToSpeech(this) { estado ->
@@ -263,7 +248,6 @@ class MainActivity : ComponentActivity() {
         
         setContent { PantallaPrincipal() }
         
-        // ✅ ESCUCHAR PARA ACTUALIZAR PANTALLA
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (nivel1 in snapshot.children) {
@@ -292,7 +276,6 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(e: DatabaseError) {}
         })
 
-        // ✅ ESCUCHAR SENSORES PARA ACTUALIZAR PANTALLA
         db.child("sensores").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 voltaje = snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0
@@ -444,7 +427,6 @@ class MainActivity : ComponentActivity() {
             Column(modifier = Modifier.fillMaxSize().padding(padding).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("MONEDERO PAOYHAN", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
 
-                // ✅ 3 ÍCONOS ARRIBA: MONTO • VOLTAJE • TEMPERATURA
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFCDFF33))) {
                         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -494,7 +476,7 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(12.dp))
                 Text("Historial", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                Spacer(modifierifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Column(modifier = Modifier.fillMaxWidth().weight(1f).background(Color(0xFFE0F7FF), RoundedCornerShape(12.dp)).padding(8.dp)) {
                     LazyColumn(modifier = Modifier.fillMaxWidth()) {
