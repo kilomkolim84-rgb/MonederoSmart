@@ -55,17 +55,21 @@ class MainActivity : ComponentActivity() {
     private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
     private var tts: TextToSpeech? = null
     private var vozLista = false
-
     private lateinit var prefs: SharedPreferences
     private val TOTAL_GUARDADO = "total_acumulado"
-
     private val permisoNotificaciones = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // ✅ INICIALIZAR FIREBASE — ESTO ES LO QUE FALTABA
-        FirebaseApp.initializeApp(this)
+        // ✅ PASO 1: INICIALIZAR FIREBASE
+        try {
+            FirebaseApp.initializeApp(this)
+            Toast.makeText(this, "✅ Firebase inicializado", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "❌ ERROR Firebase: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+        
         val db = FirebaseDatabase.getInstance().reference
         db.keepSynced(true)
         
@@ -85,17 +89,22 @@ class MainActivity : ComponentActivity() {
         
         setContent { PantallaPrincipal() }
         
-        // ✅ ESCUCHAR TICKETS
+        // ✅ PASO 2: ESCUCHAR FIREBASE
+        Toast.makeText(this, "🔍 Escuchando historial...", Toast.LENGTH_SHORT).show()
+        
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
+                Toast.makeText(this, "📡 Leyendo: ${snapshot.childrenCount} tickets", Toast.LENGTH_SHORT).show()
+                
                 for (hijo in snapshot.children) {
+                    val codigo = hijo.child("codigo").getValue(String::class.java) ?: ""
+                    val leido = hijo.child("leido_por_monedero").getValue(Boolean::class.java)
                     
-                    // ✅ SI YA FUE LEÍDO → LO SALTEA
-                    if (hijo.child("leido_por_monedero").getValue(Boolean::class.java) == true) {
+                    // ✅ SI YA FUE LEÍDO → SALTEAR
+                    if (leido == true) {
                         continue
                     }
 
-                    val codigo = hijo.child("codigo").getValue(String::class.java) ?: ""
                     val monto = hijo.child("monto").getValue(Double::class.java) ?: 0.0
                     val fecha = hijo.child("fecha").getValue(String::class.java) ?: ""
 
@@ -104,6 +113,8 @@ class MainActivity : ComponentActivity() {
 
                     // ✅ MARCAR COMO LEÍDO
                     hijo.ref.child("leido_por_monedero").setValue(true)
+                    
+                    Toast.makeText(this, "✅ TICKET LEÍDO: $codigo — S/ $monto", Toast.LENGTH_LONG).show()
 
                     // ✅ SUMAR
                     val nuevoTotal = leerTotalGuardado() + monto
@@ -121,12 +132,11 @@ class MainActivity : ComponentActivity() {
                     // ✅ SI LAS DOS LEERON → BORRAR
                     val leidoTicket = hijo.child("leido_por_ticket").getValue(Boolean::class.java) ?: false
                     if (leidoTicket) hijo.ref.removeValue()
-                    
-                    println("✅ LEÍDO: $codigo — S/ $monto")
                 }
             }
+            
             override fun onCancelled(e: DatabaseError) {
-                Toast.makeText(this@MainActivity, "❌ Sin conexión Firebase", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "❌ ERROR: ${e.message}", Toast.LENGTH_LONG).show()
             }
         })
     }
