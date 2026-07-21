@@ -62,7 +62,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // ✅ INICIALIZAR FIREBASE
         try {
             FirebaseApp.initializeApp(this)
             Toast.makeText(this@MainActivity, "✅ Firebase inicializado", Toast.LENGTH_SHORT).show()
@@ -91,38 +90,58 @@ class MainActivity : ComponentActivity() {
         
         Toast.makeText(this@MainActivity, "🔍 Escuchando historial...", Toast.LENGTH_SHORT).show()
         
+        // ✅ BUSCA EN TODOS LOS NIVELES DE FIREBASE
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                Toast.makeText(this@MainActivity, "📡 Leyendo: ${snapshot.childrenCount} tickets", Toast.LENGTH_SHORT).show()
+                var ticketsEncontrados = 0
                 
-                for (hijo in snapshot.children) {
-                    val leido = hijo.child("leido_por_monedero").getValue(Boolean::class.java)
-                    if (leido == true) continue
-
-                    val codigo = hijo.child("codigo").getValue(String::class.java) ?: ""
-                    val monto = hijo.child("monto").getValue(Double::class.java) ?: 0.0
-                    val fecha = hijo.child("fecha").getValue(String::class.java) ?: ""
-
-                    if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
-                    if (monto <= 0.0) continue
-
-                    hijo.ref.child("leido_por_monedero").setValue(true)
+                // ✅ NIVEL 1: código del ticket (ej: 499561)
+                for (nivel1 in snapshot.children) {
                     
-                    Toast.makeText(this@MainActivity, "✅ TICKET LEÍDO: $codigo — S/ $monto", Toast.LENGTH_LONG).show()
+                    // ✅ NIVEL 2: clave aleatoria de Firebase (ej: -0y1T0zla...)
+                    for (nivel2 in nivel1.children) {
+                        
+                        val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
+                        val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
+                        val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
+                        val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+                        
+                        ticketsEncontrados++
+                        
+                        // ✅ SI YA FUE LEÍDO → SALTEAR
+                        if (leido == true) continue
+                        
+                        if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
+                        if (monto <= 0.0) continue
 
-                    val nuevoTotal = leerTotalGuardado() + monto
-                    totalGeneral = nuevoTotal
-                    guardarTotal(nuevoTotal)
+                        // ✅ MARCAR COMO LEÍDO
+                        nivel2.ref.child("leido_por_monedero").setValue(true)
+                        
+                        Toast.makeText(this@MainActivity, "✅ TICKET LEÍDO: $codigo — S/ $monto", Toast.LENGTH_LONG).show()
 
-                    val nuevoTicket = Movimiento(fecha, "Ticket generado", monto, nuevoTotal, codigo, "")
-                    historial = listOf(nuevoTicket) + historial
-                    
-                    hablarPlingUnaVez()
-                    mostrarNotificacion(monto, nuevoTotal)
-                    
-                    val leidoTicket = hijo.child("leido_por_ticket").getValue(Boolean::class.java) ?: false
-                    if (leidoTicket) hijo.ref.removeValue()
+                        // ✅ SUMAR
+                        val nuevoTotal = leerTotalGuardado() + monto
+                        totalGeneral = nuevoTotal
+                        guardarTotal(nuevoTotal)
+
+                        // ✅ AGREGAR AL HISTORIAL
+                        val nuevoTicket = Movimiento(fecha, "Ticket generado", monto, nuevoTotal, codigo, "")
+                        historial = listOf(nuevoTicket) + historial
+                        
+                        // ✅ NOTIFICACIÓN + PLING
+                        hablarPlingUnaVez()
+                        mostrarNotificacion(monto, nuevoTotal)
+                        
+                        // ✅ SI LAS DOS LEERON → BORRAR
+                        val leidoTicket = nivel2.child("leido_por_ticket").getValue(Boolean::class.java) ?: false
+                        if (leidoTicket) {
+                            nivel2.ref.removeValue()
+                            Toast.makeText(this@MainActivity, "🗑️ Ticket borrado de Firebase", Toast.LENGTH_SHORT).show()
+                        }
+                    }
                 }
+                
+                Toast.makeText(this@MainActivity, "📡 Tickets encontrados: $ticketsEncontrados", Toast.LENGTH_SHORT).show()
             }
             
             override fun onCancelled(e: DatabaseError) {
