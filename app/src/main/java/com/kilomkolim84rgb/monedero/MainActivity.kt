@@ -4,11 +4,13 @@ import android.app.AlertDialog
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
+import android.os.IBinder
 import android.speech.tts.TextToSpeech
 import android.widget.EditText
 import android.widget.ImageButton
@@ -46,6 +48,8 @@ import java.util.*
 
 const val CLAVE_VACIADO = "222777"
 const val CANAL_NOTIFICACIONES = "canal_monedero"
+const val CANAL_SERVICIO = "canal_servicio"
+const val ID_NOTIFICACION_SERVICIO = 12345
 
 data class Movimiento(
     val fechaHora: String = "",
@@ -56,6 +60,131 @@ data class Movimiento(
     val alias: String = ""
 )
 
+// ==============================================
+// 🔵 SERVICIO QUE SE QUEDA ESCUCHANDO SIEMPRE
+// ==============================================
+class MonederoServicio : Service() {
+    private var tts: TextToSpeech? = null
+    private var vozLista = false
+    private lateinit var prefs: SharedPreferences
+    private val TOTAL_GUARDADO = "total_acumulado"
+    private var escuchando: ValueEventListener? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        prefs = getSharedPreferences("MonederoPrefs", Context.MODE_PRIVATE)
+        
+        // ✅ INICIAR TTS
+        tts = TextToSpeech(this) { estado ->
+            vozLista = estado == TextToSpeech.SUCCESS
+            if(vozLista) {
+                tts?.language = Locale("es", "PE")
+                tts?.setPitch(1.5f)
+                tts?.setSpeechRate(1.0f)
+            }
+        }
+
+        // ✅ NOTIFICACIÓN PARA QUE ANDROID NO MATE EL SERVICIO
+        crearCanalServicio()
+        val notificacion = NotificationCompat.Builder(this, CANAL_SERVICIO)
+            .setSmallIcon(android.R.drawable.ic_menu_info_details)
+            .setContentTitle("Monedero Smart")
+            .setContentText("✅ Escuchando tickets...")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .build()
+        startForeground(ID_NOTIFICACION_SERVICIO, notificacion)
+
+        escucharFirebase()
+    }
+
+    private fun crearCanalServicio() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val canal = NotificationChannel(CANAL_SERVICIO, "Servicio Monedero", NotificationManager.IMPORTANCE_LOW)
+            canal.description = "Escucha tickets en segundo plano"
+            getSystemService(NotificationManager::class.java).createNotificationChannel(canal)
+        }
+    }
+
+    private fun escucharFirebase() {
+        val db = FirebaseDatabase.getInstance().reference
+        db.keepSynced(true)
+
+        escuchando = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                for (nivel1 in snapshot.children) {
+                    for (nivel2 in nivel1.children) {
+                        
+                        val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
+                        val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
+                        val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
+                        val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+                        
+                        if (leido == true) continue
+                        if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
+                        if (monto <= 0.0) continue
+
+                        // ✅ MARCAR COMO LEÍDO
+                        nivel2.ref.child("leido_por_monedero").setValue(true)
+
+                        // ✅ SUMAR AL TOTAL
+                        val totalActual = prefs.getFloat(TOTAL_GUARDADO, 0f).toDouble()
+                        val nuevoTotal = totalActual + monto
+                        prefs.edit().putFloat(TOTAL_GUARDADO, nuevoTotal.toFloat()).apply()
+
+                        // ✅ SONAR "plin"
+                        if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
+
+                        // ✅ MOSTRAR NOTIFICACIÓN
+                        mostrarNotificacion(monto, nuevoTotal)
+
+                        // ✅ BORRAR SI LAS DOS APPS LEERON
+                        val leidoTicket = nivel2.child("leido_por_ticket").getValue(Boolean::class.java) ?: false
+                        if (leidoTicket) nivel2.ref.removeValue()
+                    }
+                }
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        }
+
+        db.child("historial").addValueEventListener(escuchando!!)
+    }
+
+    private fun mostrarNotificacion(monto: Double, total: Double) {
+        val intent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
+        val aviso = NotificationCompat.Builder(this, CANAL_NOTIFICACIONES)
+            .setSmallIcon(android.R.drawable.ic_menu_info_details)
+            .setContentTitle("✅ Confirmación de Pago")
+            .setContentText("Monedero te envió S/ ${String.format("%.2f", monto)}")
+            .setStyle(NotificationCompat.BigTextStyle().bigText("Monedero te envió S/ ${String.format("%.2f", monto)}\nTotal acumulado: S/ ${String.format("%.2f", total)}"))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
+            .build()
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            NotificationManagerCompat.from(this).notify(1001, aviso)
+        }
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onDestroy() {
+        super.onDestroy()
+        escuchando?.let {
+            FirebaseDatabase.getInstance().reference.child("historial").removeEventListener(it)
+        }
+        tts?.stop()
+        tts?.shutdown()
+    }
+}
+
+// ==============================================
+// 🟢 ACTIVIDAD PRINCIPAL
+// ==============================================
 class MainActivity : ComponentActivity() {
     private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
     private var tts: TextToSpeech? = null
@@ -72,21 +201,19 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         
         prefs = getSharedPreferences("MonederoPrefs", Context.MODE_PRIVATE)
-        
-        // ✅ CARGAR TOTAL E HISTORIAL GUARDADOS AL ABRIR
         totalGeneral = leerTotalGuardado()
         cargarHistorialGuardado()
         
         try {
             FirebaseApp.initializeApp(this)
-            Toast.makeText(this@MainActivity, "✅ Firebase conectado", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            Toast.makeText(this@MainActivity, "❌ ERROR: ${e.message}", Toast.LENGTH_LONG).show()
-        }
+        } catch (e: Exception) { }
         
         val db = FirebaseDatabase.getInstance().reference
         db.keepSynced(true)
         
+        // ✅ INICIAR SERVICIO EN SEGUNDO PLANO
+        startForegroundService(Intent(this, MonederoServicio::class.java))
+
         tts = TextToSpeech(this) { estado ->
             vozLista = estado == TextToSpeech.SUCCESS
             if(vozLista) {
@@ -101,64 +228,39 @@ class MainActivity : ComponentActivity() {
         
         setContent { PantallaPrincipal() }
         
-        Toast.makeText(this@MainActivity, "🔍 Escuchando tickets...", Toast.LENGTH_SHORT).show()
-        
+        // ✅ ESCUCHAR PARA ACTUALIZAR PANTALLA
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                var ticketsEncontrados = 0
-                
                 for (nivel1 in snapshot.children) {
                     for (nivel2 in nivel1.children) {
-                        
                         val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
                         val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
                         val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
                         val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
                         
-                        ticketsEncontrados++
-                        
-                        if (leido == true) continue
-                        
+                        if (leido != true) continue
                         if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
                         if (monto <= 0.0) continue
-
-                        nivel2.ref.child("leido_por_monedero").setValue(true)
                         
-                        Toast.makeText(this@MainActivity, "✅ LEÍDO: $codigo — S/ $monto", Toast.LENGTH_LONG).show()
-
+                        val existeYa = historial.any { it.codigo == codigo }
+                        if (existeYa) continue
+                        
                         val totalActual = leerTotalGuardado()
-                        val nuevoTotal = totalActual + monto
-                        totalGeneral = nuevoTotal
-                        guardarTotal(nuevoTotal)
-
-                        val nuevoTicket = Movimiento(fecha, "Ticket generado", monto, nuevoTotal, codigo, "")
+                        val nuevoTicket = Movimiento(fecha, "Ticket generado", monto, totalActual, codigo, "")
                         historial = listOf(nuevoTicket) + historial
+                        totalGeneral = totalActual
                         guardarHistorial()
-                        
-                        hablarPlinUnaVez()
-                        mostrarNotificacion(monto, nuevoTotal)
-                        
-                        val leidoTicket = nivel2.child("leido_por_ticket").getValue(Boolean::class.java) ?: false
-                        if (leidoTicket) {
-                            nivel2.ref.removeValue()
-                            Toast.makeText(this@MainActivity, "🗑️ Borrado de Firebase", Toast.LENGTH_SHORT).show()
-                        }
                     }
                 }
-                
-                Toast.makeText(this@MainActivity, "📡 Tickets: $ticketsEncontrados | Total: S/ ${String.format("%.2f", totalGeneral)}", Toast.LENGTH_SHORT).show()
+                totalGeneral = leerTotalGuardado()
             }
-            
-            override fun onCancelled(e: DatabaseError) {
-                Toast.makeText(this@MainActivity, "❌ ERROR: ${e.message}", Toast.LENGTH_LONG).show()
-            }
+            override fun onCancelled(e: DatabaseError) {}
         })
     }
 
     private fun leerTotalGuardado(): Double = prefs.getFloat(TOTAL_GUARDADO, 0f).toDouble()
     private fun guardarTotal(total: Double) = prefs.edit().putFloat(TOTAL_GUARDADO, total.toFloat()).apply()
 
-    // ✅ GUARDAR Y CARGAR HISTORIAL
     private fun guardarHistorial() {
         val historialTexto = historial.joinToString("|||") { mov ->
             "${mov.fechaHora}§${mov.detalle}§${mov.montoIngresado}§${mov.totalAcumulado}§${mov.codigo}§${mov.alias}"
@@ -173,12 +275,10 @@ class MainActivity : ComponentActivity() {
                 val campos = linea.split("§")
                 if (campos.size >= 5) {
                     Movimiento(
-                        campos[0],
-                        campos[1],
+                        campos[0], campos[1],
                         campos[2].toDoubleOrNull() ?: 0.0,
                         campos[3].toDoubleOrNull() ?: 0.0,
-                        campos[4],
-                        if (campos.size >= 6) campos[5] else ""
+                        campos[4], if (campos.size >= 6) campos[5] else ""
                     )
                 } else null
             }
@@ -202,30 +302,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun hablarPlinUnaVez() {
-        if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
-    }
-
-    private fun mostrarNotificacion(monto: Double, total: Double) {
-        val intent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-
-        val aviso = NotificationCompat.Builder(this, CANAL_NOTIFICACIONES)
-            .setSmallIcon(android.R.drawable.ic_menu_info_details)
-            .setContentTitle("✅ Confirmación de Pago")
-            .setContentText("Monedero te envió S/ ${String.format("%.2f", monto)}")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("Monedero te envió S/ ${String.format("%.2f", monto)}\nTotal acumulado: S/ ${String.format("%.2f", total)}"))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
-            .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
-            .build()
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-            NotificationManagerCompat.from(this).notify(1001, aviso)
-        }
-    }
-
     private fun ponerAlias(posicion: Int) {
         val campoAlias = EditText(this)
         AlertDialog.Builder(this)
@@ -241,21 +317,15 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
-    // ✅ VACIAR SOLO EL TOTAL — NO TOCA FIREBASE
     private fun pedirClaveVaciado() {
         val campoClave = EditText(this)
         campoClave.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
-        campoClave.filters = arrayOf(InputFilter.LengthFilter(6)) // ✅ EXACTAMENTE 6 DÍGITOS
+        campoClave.filters = arrayOf(InputFilter.LengthFilter(6))
 
-        // ✅ CREAR EL OJITO PARA VER/OCULTAR
         val contenedor = LinearLayout(this)
         contenedor.orientation = LinearLayout.HORIZONTAL
         contenedor.setPadding(48, 16, 48, 16)
-        contenedor.layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-
+        contenedor.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         campoClave.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         val botonOjo = ImageButton(this)
         botonOjo.setImageResource(android.R.drawable.ic_menu_view)
@@ -273,7 +343,6 @@ class MainActivity : ComponentActivity() {
                 botonOjo.setImageResource(android.R.drawable.ic_menu_view)
             }
         }
-
         contenedor.addView(campoClave)
         contenedor.addView(botonOjo)
 
@@ -294,7 +363,6 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
-    // ✅ LIMPIAR SOLO EL HISTORIAL LOCAL — NO TOCA FIREBASE
     private fun limpiarHistorial() {
         AlertDialog.Builder(this)
             .setTitle("LIMPIAR HISTORIAL")
