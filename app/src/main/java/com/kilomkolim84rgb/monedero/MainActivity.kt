@@ -76,10 +76,8 @@ class MainActivity : ComponentActivity() {
 
         crearCanalNotificaciones()
         pedirPermisoNotificaciones()
-        startForegroundService(Intent(this, EscuchaFirebaseService::class.java))
         
         setContent { PantallaPrincipal() }
-        escucharDatos()
         escucharTicketsNuevos()
     }
 
@@ -113,7 +111,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun hablarPling() {
+    private fun hablarPlingUnaVez() {
         if(vozLista) {
             tts?.speak("pling", TextToSpeech.QUEUE_FLUSH, null, null)
         }
@@ -144,152 +142,66 @@ class MainActivity : ComponentActivity() {
     }
 
     private var totalGeneral by mutableStateOf(0.0)
-    private var ultimoMovimiento by mutableStateOf("-")
     private var historial by mutableStateOf(listOf<Movimiento>())
-    private var temperatura by mutableStateOf("-- °C")
-    private var voltaje by mutableStateOf("-- V")
-    private var distanciaRayos by mutableStateOf("-- km")
-    private var totalAnterior = 0.0
 
-    private fun escucharDatos() {
-        db.keepSynced(true)
-        
-        totalGeneral = leerTotalGuardado()
-        totalAnterior = totalGeneral
-
-        db.child("total_general").addListenerForSingleValueEvent(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val valorFirebase = snapshot.getValue(Double::class.java) ?: 0.0
-                if(valorFirebase > totalGeneral) {
-                    totalGeneral = valorFirebase
-                    guardarTotal(totalGeneral)
-                }
-                totalAnterior = totalGeneral
-            }
-            override fun onCancelled(e: DatabaseError) {}
-        })
-
-        db.child("total_general").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val nuevoTotalFirebase = snapshot.getValue(Double::class.java) ?: 0.0
-                
-                if(nuevoTotalFirebase > totalAnterior){
-                    val cuantoEntro = nuevoTotalFirebase - totalAnterior
-                    val totalAcumulado = leerTotalGuardado() + cuantoEntro
-                    totalGeneral = totalAcumulado
-                    guardarTotal(totalAcumulado)
-                    
-                    val fecha = formatoFecha.format(Date())
-                    val nuevoMov = Movimiento(fecha, "Ingreso", cuantoEntro, totalAcumulado, "", "")
-                    historial = listOf(nuevoMov) + historial
-                    
-                    db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
-                    
-                    hablarPling()
-                    mostrarNotificacion(cuantoEntro, totalAcumulado)
-                }
-                totalAnterior = nuevoTotalFirebase
-            }
-            override fun onCancelled(e: DatabaseError) {
-                Toast.makeText(this@MainActivity, "Sin conexión", Toast.LENGTH_SHORT).show()
-            }
-        })
-
-        db.child("ultimo_movimiento").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(s: DataSnapshot) {
-                ultimoMovimiento = s.getValue(String::class.java) ?: "-"
-            }
-            override fun onCancelled(e: DatabaseError) {}
-        })
-
-        db.child("sensores/temperatura").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(s: DataSnapshot) {
-                val v = s.getValue(Double::class.java)
-                temperatura = if(v!=null) String.format("%.1f °C", v) else "-- °C"
-            }
-            override fun onCancelled(e: DatabaseError) {}
-        })
-
-        db.child("sensores/voltaje").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(s: DataSnapshot) {
-                val v = s.getValue(Double::class.java)
-                voltaje = if(v!=null) String.format("%.1f V", v) else "-- V"
-            }
-            override fun onCancelled(e: DatabaseError) {}
-        })
-
-        db.child("sensores/rayos_distancia").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(s: DataSnapshot) {
-                val v = s.getValue(Double::class.java)
-                distanciaRayos = if(v!=null) String.format("%.0f km", v) else "-- km"
-            }
-            override fun onCancelled(e: DatabaseError) {}
-        })
-    }
-
-    // ✅ TICKETS: SE LEE UNA SOLA VEZ Y SE MARCA COMO LEÍDO INMEDIATAMENTE
+    // ✅ ESCUCHAR TICKETS NUEVOS — SUENA PLING SOLO AL LLEGAR
     private fun escucharTicketsNuevos() {
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (hijo in snapshot.children) {
                     
-                    // ✅ SI YA FUE LEÍDO → LO SALTEA, NO LO VUELVE A SUMAR
+                    // ✅ SI YA FUE LEÍDO → NO SUENA, NO SUMAR DE NUEVO
                     if (hijo.child("leido_por_monedero").getValue(Boolean::class.java) == true) {
                         continue
                     }
 
                     val codigo = hijo.child("codigo").getValue(String::class.java) ?: ""
-                    val monto = hijo.child("monto").getValue(Double::class.java) 
-                                ?: hijo.child("montoIngresado").getValue(Double::class.java) ?: 0.0
-                    val fecha = hijo.child("fecha").getValue(String::class.java) 
-                                ?: hijo.child("fechaHora").getValue(String::class.java) ?: ""
+                    val monto = hijo.child("monto").getValue(Double::class.java) ?: 0.0
+                    val fecha = hijo.child("fecha").getValue(String::class.java) ?: ""
 
                     if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
                     if (monto <= 0.0) continue
 
-                    // ✅ LO MARCA COMO LEÍDO INMEDIATAMENTE → NADIE LO VUELVE A TOCAR
+                    // ✅ MARCAR COMO LEÍDO ANTES DE PROCESAR
                     hijo.ref.child("leido_por_monedero").setValue(true)
 
-                    // ✅ SUMA EL MONTO
-                    val totalAcumulado = leerTotalGuardado() + monto
-                    totalGeneral = totalAcumulado
-                    guardarTotal(totalAcumulado)
+                    // ✅ SUMA AL TOTAL
+                    val nuevoTotal = leerTotalGuardado() + monto
+                    totalGeneral = nuevoTotal
+                    guardarTotal(nuevoTotal)
 
+                    // ✅ AGREGA AL HISTORIAL
                     val nuevoTicket = Movimiento(
                         fechaHora = fecha,
                         detalle = "Ticket generado",
                         montoIngresado = monto,
-                        totalAcumulado = totalAcumulado,
+                        totalAcumulado = nuevoTotal,
                         codigo = codigo,
                         alias = ""
                     )
                     historial = listOf(nuevoTicket) + historial
                     
-                    hablarPling()
-                    mostrarNotificacion(monto, totalAcumulado)
+                    // ✅ SUENA PLING Y MUESTRA NOTIFICACIÓN — UNA SOLA VEZ
+                    hablarPlingUnaVez()
+                    mostrarNotificacion(monto, nuevoTotal)
                     
-                    println("✅ TICKET LEÍDO Y SUMADO: $codigo — S/ $monto — MARCADO COMO LEÍDO")
+                    // ✅ VERIFICAR SI LAS DOS APPs LEERON → BORRAR TICKET
+                    val leidoTicket = hijo.child("leido_por_ticket").getValue(Boolean::class.java) ?: false
+                    if (leidoTicket) {
+                        hijo.ref.removeValue()
+                        println("✅ LAS DOS LEÍERON — TICKET BORRADO DE FIREBASE: $codigo")
+                    }
+                    
+                    println("✅ TICKET PROCESADO: $codigo — S/ $monto")
                 }
             }
             override fun onCancelled(e: DatabaseError) {
-                Toast.makeText(this@MainActivity, "Error leyendo tickets", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "Sin conexión a Firebase", Toast.LENGTH_SHORT).show()
             }
         })
     }
 
-    private fun reiniciarSensores() {
-        temperatura = "-- °C"
-        voltaje = "-- V"
-        distanciaRayos = "-- km"
-        
-        db.child("sensores/temperatura").removeValue()
-        db.child("sensores/voltaje").removeValue()
-        db.child("sensores/rayos_distancia").removeValue()
-        
-        Toast.makeText(this, "✅ Sensores reiniciados", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun ponerAlias(posicion: Int, claveFirebase: String) {
+    private fun ponerAlias(posicion: Int) {
         val campoAlias = EditText(this)
         campoAlias.hint = "Escribe el nombre o alias"
         
@@ -339,34 +251,6 @@ class MainActivity : ComponentActivity() {
             ) {
                 Text("MONEDERO SMART", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp), color = Color.Black)
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    BotonDato("TEMP", temperatura)
-                    BotonDato("VOLT", voltaje)
-                    BotonDato("RAYOS", distanciaRayos)
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Button(
-                    onClick = { reiniciarSensores() },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.height(40.dp)
-                ) {
-                    Text("REINICIAR SENSORES", fontSize = 11.sp)
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Button(
-                    onClick = { pedirClave() },
-                    colors = ButtonDefaults.buttonColors(MaterialTheme.colorScheme.error),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.height(40.dp)
-                ) {
-                    Text("VACIAR", fontSize = 11.sp)
-                }
-
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Card(
@@ -377,9 +261,18 @@ class MainActivity : ComponentActivity() {
                     Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("TOTAL", fontSize = 14.sp, color = Color.Black)
                         Text(String.format("%.2f SOLES", totalGeneral), fontSize = 36.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Último: $ultimoMovimiento", fontSize = 12.sp, color = Color.DarkGray)
                     }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = { pedirClave() },
+                    colors = ButtonDefaults.buttonColors(MaterialTheme.colorScheme.error),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.height(40.dp)
+                ) {
+                    Text("VACIAR", fontSize = 12.sp)
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -428,29 +321,20 @@ class MainActivity : ComponentActivity() {
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = colorAlias,
-                                                modifier = Modifier.clickable { ponerAlias(posicion, "") }
+                                                modifier = Modifier.clickable { ponerAlias(posicion) }
                                             )
                                             Text(mov.fechaHora, fontSize = 11.sp, color = Color.Gray)
-                                            if(mov.detalle == "Monedero vaciado"){
-                                                Text("⚠️ Vaciado", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Red)
-                                            } else if(mov.codigo.isNotEmpty()) {
+                                            if(mov.codigo.isNotEmpty()) {
                                                 Text("Ticket creado", fontSize = 12.sp, color = Color(0xFF4CAF50))
                                             }
                                         }
                                     }
-                                    Column(
-                                        horizontalAlignment = Alignment.End,
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
+                                    Column(horizontalAlignment = Alignment.End) {
                                         if(mov.codigo.isNotEmpty()){
                                             Text("CÓDIGO: ${mov.codigo}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
-                                        } else if (mov.montoIngresado > 0) {
-                                            Text(
-                                                textoMonto,
-                                                fontSize = 22.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF2E7D32)
-                                            )
+                                        }
+                                        if (mov.montoIngresado > 0) {
+                                            Text(textoMonto, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
                                         }
                                     }
                                 }
@@ -458,24 +342,6 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-            }
-        }
-    }
-
-    @Composable
-    fun BotonDato(etiqueta: String, valor: String) {
-        Card(
-            modifier = Modifier.size(90.dp, 50.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEB3B))
-        ) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(etiqueta, fontSize = 9.sp, fontWeight = FontWeight.Medium, color = Color.Black)
-                Text(valor, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black)
             }
         }
     }
@@ -503,99 +369,12 @@ class MainActivity : ComponentActivity() {
         val reg = Movimiento(fecha, "Monedero vaciado", 0.0, 0.0, "")
         historial = listOf(reg) + historial
         
-        db.child("total_general").setValue(0.0)
-        db.child("ultimo_movimiento").setValue("Monedero vaciado")
-        
-        totalAnterior = 0.0
         totalGeneral = 0.0
         guardarTotal(0.0)
         
-        hablarPling()
         Toast.makeText(this, "✅ Vaciado correctamente", Toast.LENGTH_SHORT).show()
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        tts?.stop()
-        tts?.shutdown()
-    }
-}
-
-class EscuchaFirebaseService : android.app.Service() {
-    private val db = FirebaseDatabase.getInstance().reference
-    private var totalAnterior = 0.0
-    private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
-    private var tts: TextToSpeech? = null
-    private var vozLista = false
-    private lateinit var prefs: SharedPreferences
-
-    override fun onCreate() {
-        super.onCreate()
-        prefs = getSharedPreferences("MonederoPrefs", Context.MODE_PRIVATE)
-        db.keepSynced(true)
-        
-        val notificacion = NotificationCompat.Builder(this, CANAL_NOTIFICACIONES)
-            .setSmallIcon(android.R.drawable.ic_menu_info_details)
-            .setContentTitle("Monedero activo")
-            .setContentText("Escuchando ingresos...")
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true)
-            .build()
-        
-        startForeground(1002, notificacion)
-
-        tts = TextToSpeech(this) { estado ->
-            vozLista = estado == TextToSpeech.SUCCESS
-            if(vozLista) {
-                tts?.language = Locale("es", "PE")
-                tts?.setPitch(1.3f)
-                tts?.setSpeechRate(0.85f)
-            }
-        }
-
-        totalAnterior = prefs.getFloat("total_acumulado", 0f).toDouble()
-
-        db.child("total_general").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val nuevoTotal = snapshot.getValue(Double::class.java) ?: 0.0
-                if(nuevoTotal > totalAnterior){
-                    val cuantoEntro = nuevoTotal - totalAnterior
-                    val totalAcumulado = prefs.getFloat("total_acumulado", 0f).toDouble() + cuantoEntro
-                    prefs.edit().putFloat("total_acumulado", totalAcumulado.toFloat()).apply()
-                    
-                    db.child("ultimo_movimiento").setValue("Ingreso: ${String.format("%.2f", cuantoEntro)} soles")
-                    
-                    if(vozLista){
-                        tts?.speak("pling", TextToSpeech.QUEUE_FLUSH, null, null)
-                    }
-                    
-                    val intent = Intent(this@EscuchaFirebaseService, MainActivity::class.java)
-                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                    val pendingIntent = PendingIntent.getActivity(
-                        this@EscuchaFirebaseService,
-                        0,
-                        intent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    )
-                    
-                    val aviso = NotificationCompat.Builder(this@EscuchaFirebaseService, CANAL_NOTIFICACIONES)
-                        .setSmallIcon(android.R.drawable.ic_menu_info_details)
-                        .setContentTitle("✅ INGRESO REGISTRADO")
-                        .setContentText("Entró moneda | Total: ${String.format("%.2f", totalAcumulado)} soles")
-                        .setPriority(NotificationCompat.PRIORITY_HIGH)
-                        .setAutoCancel(true)
-                        .setContentIntent(pendingIntent)
-                        .build()
-                    
-                    NotificationManagerCompat.from(this@EscuchaFirebaseService).notify(1001, aviso)
-                }
-                totalAnterior = nuevoTotal
-            }
-            override fun onCancelled(e: DatabaseError) {}
-        })
-    }
-
-    override fun onBind(intent: Intent?) = null
     override fun onDestroy() {
         super.onDestroy()
         tts?.stop()
