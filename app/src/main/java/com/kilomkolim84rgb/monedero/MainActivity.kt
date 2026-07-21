@@ -96,7 +96,8 @@ class MainActivity : ComponentActivity() {
                 "Monedero Smart",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Avisos de ingresos y movimientos"
+                description = "Confirmaciones de pago"
+                enableVibration(true)
             }
             val gestor = getSystemService(NotificationManager::class.java)
             gestor.createNotificationChannel(canal)
@@ -129,11 +130,14 @@ class MainActivity : ComponentActivity() {
 
         val aviso = NotificationCompat.Builder(this, CANAL_NOTIFICACIONES)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
-            .setContentTitle("✅ INGRESO REGISTRADO")
-            .setContentText("Entró moneda | Total: ${String.format("%.2f", total)} soles")
+            .setContentTitle("✅ Confirmación de Pago")
+            .setContentText("Monedero te envió S/ ${String.format("%.2f", monto)}")
+            .setStyle(NotificationCompat.BigTextStyle()
+                .bigText("Monedero te envió S/ ${String.format("%.2f", monto)}\nTotal acumulado: S/ ${String.format("%.2f", total)}"))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
+            .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
             .build()
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
@@ -144,13 +148,12 @@ class MainActivity : ComponentActivity() {
     private var totalGeneral by mutableStateOf(0.0)
     private var historial by mutableStateOf(listOf<Movimiento>())
 
-    // ✅ ESCUCHAR TICKETS NUEVOS — SUENA PLING SOLO AL LLEGAR
     private fun escucharTicketsNuevos() {
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (hijo in snapshot.children) {
                     
-                    // ✅ SI YA FUE LEÍDO → NO SUENA, NO SUMAR DE NUEVO
+                    // ✅ SI YA FUE LEÍDO → NO SUENA, NO SUMAR
                     if (hijo.child("leido_por_monedero").getValue(Boolean::class.java) == true) {
                         continue
                     }
@@ -162,15 +165,15 @@ class MainActivity : ComponentActivity() {
                     if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
                     if (monto <= 0.0) continue
 
-                    // ✅ MARCAR COMO LEÍDO ANTES DE PROCESAR
+                    // ✅ MARCAR COMO LEÍDO
                     hijo.ref.child("leido_por_monedero").setValue(true)
 
-                    // ✅ SUMA AL TOTAL
+                    // ✅ SUMAR AL TOTAL
                     val nuevoTotal = leerTotalGuardado() + monto
                     totalGeneral = nuevoTotal
                     guardarTotal(nuevoTotal)
 
-                    // ✅ AGREGA AL HISTORIAL
+                    // ✅ AGREGAR AL HISTORIAL
                     val nuevoTicket = Movimiento(
                         fechaHora = fecha,
                         detalle = "Ticket generado",
@@ -185,18 +188,18 @@ class MainActivity : ComponentActivity() {
                     hablarPlingUnaVez()
                     mostrarNotificacion(monto, nuevoTotal)
                     
-                    // ✅ VERIFICAR SI LAS DOS APPs LEERON → BORRAR TICKET
+                    // ✅ SI LAS DOS APPs LEERON → BORRAR TICKET
                     val leidoTicket = hijo.child("leido_por_ticket").getValue(Boolean::class.java) ?: false
                     if (leidoTicket) {
                         hijo.ref.removeValue()
-                        println("✅ LAS DOS LEÍERON — TICKET BORRADO DE FIREBASE: $codigo")
+                        println("✅ TICKET BORRADO: $codigo")
                     }
                     
-                    println("✅ TICKET PROCESADO: $codigo — S/ $monto")
+                    println("✅ PROCESADO: $codigo — S/ $monto")
                 }
             }
             override fun onCancelled(e: DatabaseError) {
-                Toast.makeText(this@MainActivity, "Sin conexión a Firebase", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "Sin conexión", Toast.LENGTH_SHORT).show()
             }
         })
     }
