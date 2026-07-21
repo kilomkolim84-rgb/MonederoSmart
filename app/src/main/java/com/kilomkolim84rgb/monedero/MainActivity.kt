@@ -59,27 +59,31 @@ class MainActivity : ComponentActivity() {
     private val TOTAL_GUARDADO = "total_acumulado"
     private val permisoNotificaciones = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
+    private var totalGeneral by mutableStateOf(0.0)
+    private var historial by mutableStateOf(listOf<Movimiento>())
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        prefs = getSharedPreferences("MonederoPrefs", Context.MODE_PRIVATE)
+        totalGeneral = leerTotalGuardado()
+        
         try {
             FirebaseApp.initializeApp(this)
-            Toast.makeText(this@MainActivity, "✅ Firebase inicializado", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@MainActivity, "✅ Firebase conectado", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            Toast.makeText(this@MainActivity, "❌ ERROR Firebase: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(this@MainActivity, "❌ ERROR: ${e.message}", Toast.LENGTH_LONG).show()
         }
         
         val db = FirebaseDatabase.getInstance().reference
         db.keepSynced(true)
         
-        prefs = getSharedPreferences("MonederoPrefs", Context.MODE_PRIVATE)
-        
         tts = TextToSpeech(this) { estado ->
             vozLista = estado == TextToSpeech.SUCCESS
             if(vozLista) {
                 tts?.language = Locale("es", "PE")
-                tts?.setPitch(1.3f)
-                tts?.setSpeechRate(0.85f)
+                tts?.setPitch(1.5f)
+                tts?.setSpeechRate(1.0f)
             }
         }
 
@@ -88,17 +92,13 @@ class MainActivity : ComponentActivity() {
         
         setContent { PantallaPrincipal() }
         
-        Toast.makeText(this@MainActivity, "🔍 Escuchando historial...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this@MainActivity, "🔍 Escuchando tickets...", Toast.LENGTH_SHORT).show()
         
-        // ✅ BUSCA EN TODOS LOS NIVELES DE FIREBASE
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 var ticketsEncontrados = 0
                 
-                // ✅ NIVEL 1: código del ticket (ej: 499561)
                 for (nivel1 in snapshot.children) {
-                    
-                    // ✅ NIVEL 2: clave aleatoria de Firebase (ej: -0y1T0zla...)
                     for (nivel2 in nivel1.children) {
                         
                         val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
@@ -108,40 +108,36 @@ class MainActivity : ComponentActivity() {
                         
                         ticketsEncontrados++
                         
-                        // ✅ SI YA FUE LEÍDO → SALTEAR
                         if (leido == true) continue
                         
                         if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
                         if (monto <= 0.0) continue
 
-                        // ✅ MARCAR COMO LEÍDO
                         nivel2.ref.child("leido_por_monedero").setValue(true)
                         
-                        Toast.makeText(this@MainActivity, "✅ TICKET LEÍDO: $codigo — S/ $monto", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@MainActivity, "✅ LEÍDO: $codigo — S/ $monto", Toast.LENGTH_LONG).show()
 
-                        // ✅ SUMAR
-                        val nuevoTotal = leerTotalGuardado() + monto
+                        val totalActual = leerTotalGuardado()
+                        val nuevoTotal = totalActual + monto
                         totalGeneral = nuevoTotal
                         guardarTotal(nuevoTotal)
 
-                        // ✅ AGREGAR AL HISTORIAL
                         val nuevoTicket = Movimiento(fecha, "Ticket generado", monto, nuevoTotal, codigo, "")
                         historial = listOf(nuevoTicket) + historial
                         
-                        // ✅ NOTIFICACIÓN + PLING
-                        hablarPlingUnaVez()
+                        // ✅ DICE "plin" UNA SOLA VEZ
+                        hablarPlinUnaVez()
                         mostrarNotificacion(monto, nuevoTotal)
                         
-                        // ✅ SI LAS DOS LEERON → BORRAR
                         val leidoTicket = nivel2.child("leido_por_ticket").getValue(Boolean::class.java) ?: false
                         if (leidoTicket) {
                             nivel2.ref.removeValue()
-                            Toast.makeText(this@MainActivity, "🗑️ Ticket borrado de Firebase", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@MainActivity, "🗑️ Borrado de Firebase", Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
                 
-                Toast.makeText(this@MainActivity, "📡 Tickets encontrados: $ticketsEncontrados", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "📡 Tickets: $ticketsEncontrados | Total: S/ ${String.format("%.2f", totalGeneral)}", Toast.LENGTH_SHORT).show()
             }
             
             override fun onCancelled(e: DatabaseError) {
@@ -170,8 +166,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun hablarPlingUnaVez() {
-        if(vozLista) tts?.speak("pling", TextToSpeech.QUEUE_FLUSH, null, null)
+    // ✅ SOLO DICE "plin" UNA VEZ
+    private fun hablarPlinUnaVez() {
+        if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
     private fun mostrarNotificacion(monto: Double, total: Double) {
@@ -193,9 +190,6 @@ class MainActivity : ComponentActivity() {
             NotificationManagerCompat.from(this).notify(1001, aviso)
         }
     }
-
-    private var totalGeneral by mutableStateOf(0.0)
-    private var historial by mutableStateOf(listOf<Movimiento>())
 
     private fun ponerAlias(posicion: Int) {
         val campoAlias = EditText(this)
