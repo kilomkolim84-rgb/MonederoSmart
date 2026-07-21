@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.widget.EditText
+import android.widget.ImageButton
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -34,6 +35,10 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import android.Manifest
 import android.content.pm.PackageManager
+import android.text.InputFilter
+import android.text.InputType
+import android.view.ViewGroup
+import android.widget.LinearLayout
 import com.google.firebase.FirebaseApp
 import com.google.firebase.database.*
 import java.text.SimpleDateFormat
@@ -57,6 +62,7 @@ class MainActivity : ComponentActivity() {
     private var vozLista = false
     private lateinit var prefs: SharedPreferences
     private val TOTAL_GUARDADO = "total_acumulado"
+    private val HISTORIAL_GUARDADO = "historial_guardado"
     private val permisoNotificaciones = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     private var totalGeneral by mutableStateOf(0.0)
@@ -66,7 +72,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         
         prefs = getSharedPreferences("MonederoPrefs", Context.MODE_PRIVATE)
+        
+        // ✅ CARGAR TOTAL E HISTORIAL GUARDADOS AL ABRIR
         totalGeneral = leerTotalGuardado()
+        cargarHistorialGuardado()
         
         try {
             FirebaseApp.initializeApp(this)
@@ -124,8 +133,8 @@ class MainActivity : ComponentActivity() {
 
                         val nuevoTicket = Movimiento(fecha, "Ticket generado", monto, nuevoTotal, codigo, "")
                         historial = listOf(nuevoTicket) + historial
+                        guardarHistorial()
                         
-                        // ✅ DICE "plin" UNA SOLA VEZ
                         hablarPlinUnaVez()
                         mostrarNotificacion(monto, nuevoTotal)
                         
@@ -149,6 +158,33 @@ class MainActivity : ComponentActivity() {
     private fun leerTotalGuardado(): Double = prefs.getFloat(TOTAL_GUARDADO, 0f).toDouble()
     private fun guardarTotal(total: Double) = prefs.edit().putFloat(TOTAL_GUARDADO, total.toFloat()).apply()
 
+    // ✅ GUARDAR Y CARGAR HISTORIAL
+    private fun guardarHistorial() {
+        val historialTexto = historial.joinToString("|||") { mov ->
+            "${mov.fechaHora}§${mov.detalle}§${mov.montoIngresado}§${mov.totalAcumulado}§${mov.codigo}§${mov.alias}"
+        }
+        prefs.edit().putString(HISTORIAL_GUARDADO, historialTexto).apply()
+    }
+
+    private fun cargarHistorialGuardado() {
+        val texto = prefs.getString(HISTORIAL_GUARDADO, "") ?: ""
+        if (texto.isNotEmpty()) {
+            historial = texto.split("|||").mapNotNull { linea ->
+                val campos = linea.split("§")
+                if (campos.size >= 5) {
+                    Movimiento(
+                        campos[0],
+                        campos[1],
+                        campos[2].toDoubleOrNull() ?: 0.0,
+                        campos[3].toDoubleOrNull() ?: 0.0,
+                        campos[4],
+                        if (campos.size >= 6) campos[5] else ""
+                    )
+                } else null
+            }
+        }
+    }
+
     private fun crearCanalNotificaciones() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val canal = NotificationChannel(CANAL_NOTIFICACIONES, "Monedero Smart", NotificationManager.IMPORTANCE_HIGH)
@@ -166,7 +202,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ✅ SOLO DICE "plin" UNA VEZ
     private fun hablarPlinUnaVez() {
         if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
     }
@@ -200,8 +235,76 @@ class MainActivity : ComponentActivity() {
                 val nombre = campoAlias.text.toString().trim()
                 if(nombre.isNotEmpty()) {
                     historial = historial.toMutableList().also { it[posicion] = it[posicion].copy(alias = nombre) }
+                    guardarHistorial()
                 }
             }
+            .show()
+    }
+
+    // ✅ VACIAR SOLO EL TOTAL — NO TOCA FIREBASE
+    private fun pedirClaveVaciado() {
+        val campoClave = EditText(this)
+        campoClave.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        campoClave.filters = arrayOf(InputFilter.LengthFilter(6)) // ✅ EXACTAMENTE 6 DÍGITOS
+
+        // ✅ CREAR EL OJITO PARA VER/OCULTAR
+        val contenedor = LinearLayout(this)
+        contenedor.orientation = LinearLayout.HORIZONTAL
+        contenedor.setPadding(48, 16, 48, 16)
+        contenedor.layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+
+        campoClave.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        val botonOjo = ImageButton(this)
+        botonOjo.setImageResource(android.R.drawable.ic_menu_view)
+        botonOjo.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        botonOjo.setPadding(32, 0, 0, 0)
+
+        var visible = false
+        botonOjo.setOnClickListener {
+            visible = !visible
+            if (visible) {
+                campoClave.inputType = InputType.TYPE_CLASS_NUMBER
+                botonOjo.setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+            } else {
+                campoClave.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+                botonOjo.setImageResource(android.R.drawable.ic_menu_view)
+            }
+        }
+
+        contenedor.addView(campoClave)
+        contenedor.addView(botonOjo)
+
+        AlertDialog.Builder(this)
+            .setTitle("CLAVE DE SEGURIDAD")
+            .setMessage("Escribe los 6 dígitos para vaciar el monedero")
+            .setView(contenedor)
+            .setPositiveButton("CONFIRMAR") { _, _ ->
+                if(campoClave.text.toString() == CLAVE_VACIADO) {
+                    totalGeneral = 0.0
+                    guardarTotal(0.0)
+                    Toast.makeText(this@MainActivity, "✅ Monedero vaciado", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@MainActivity, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("CANCELAR", null)
+            .show()
+    }
+
+    // ✅ LIMPIAR SOLO EL HISTORIAL LOCAL — NO TOCA FIREBASE
+    private fun limpiarHistorial() {
+        AlertDialog.Builder(this)
+            .setTitle("LIMPIAR HISTORIAL")
+            .setMessage("¿Borrar todo el historial de la aplicación?\n\n⚠️ No afecta el total ni Firebase.")
+            .setPositiveButton("SÍ, LIMPIAR") { _, _ ->
+                historial = emptyList()
+                prefs.edit().remove(HISTORIAL_GUARDADO).apply()
+                Toast.makeText(this@MainActivity, "✅ Historial limpiado", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("CANCELAR", null)
             .show()
     }
 
@@ -231,8 +334,14 @@ class MainActivity : ComponentActivity() {
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
-                Button(onClick = { pedirClave() }, colors = ButtonDefaults.buttonColors(MaterialTheme.colorScheme.error), shape = RoundedCornerShape(10.dp)) {
-                    Text("VACIAR", fontSize = 12.sp)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Button(onClick = { pedirClaveVaciado() }, colors = ButtonDefaults.buttonColors(MaterialTheme.colorScheme.error), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1f)) {
+                        Text("VACIAR", fontSize = 12.sp)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Button(onClick = { limpiarHistorial() }, colors = ButtonDefaults.buttonColors(Color(0xFF1976D2)), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1f)) {
+                        Text("LIMPIAR HISTORIAL", fontSize = 12.sp)
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -269,25 +378,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-    }
-
-    private fun pedirClave() {
-        val campoClave = EditText(this)
-        campoClave.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
-        AlertDialog.Builder(this)
-            .setTitle("CLAVE DE SEGURIDAD")
-            .setView(campoClave)
-            .setPositiveButton("CONFIRMAR") { _, _ ->
-                if(campoClave.text.toString() == CLAVE_VACIADO) {
-                    totalGeneral = 0.0
-                    guardarTotal(0.0)
-                    historial = listOf(Movimiento(formatoFecha.format(Date()), "Monedero vaciado", 0.0, 0.0, "")) + historial
-                    Toast.makeText(this@MainActivity, "✅ Vaciado correctamente", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(this@MainActivity, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
-                }
-            }
-            .show()
     }
 
     override fun onDestroy() {
