@@ -88,7 +88,7 @@ class MonederoServicio : Service() {
         crearCanalServicio()
         val notificacion = NotificationCompat.Builder(this, CANAL_SERVICIO)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
-            .setContentTitle("Monedero Smart")
+            .setContentTitle("Monedero Paoyhan")
             .setContentText("✅ Escuchando tickets...")
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
@@ -100,7 +100,7 @@ class MonederoServicio : Service() {
 
     private fun crearCanalServicio() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val canal = NotificationChannel(CANAL_SERVICIO, "Servicio Monedero", NotificationManager.IMPORTANCE_LOW)
+            val canal = NotificationChannel(CANAL_SERVICIO, "Servicio Monedero Paoyhan", NotificationManager.IMPORTANCE_LOW)
             canal.description = "Escucha tickets en segundo plano"
             getSystemService(NotificationManager::class.java).createNotificationChannel(canal)
         }
@@ -287,7 +287,7 @@ class MainActivity : ComponentActivity() {
 
     private fun crearCanalNotificaciones() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val canal = NotificationChannel(CANAL_NOTIFICACIONES, "Monedero Smart", NotificationManager.IMPORTANCE_HIGH)
+            val canal = NotificationChannel(CANAL_NOTIFICACIONES, "Monedero Paoyhan", NotificationManager.IMPORTANCE_HIGH)
             canal.description = "Confirmaciones de pago"
             canal.enableVibration(true)
             getSystemService(NotificationManager::class.java).createNotificationChannel(canal)
@@ -391,7 +391,7 @@ class MainActivity : ComponentActivity() {
     fun PantallaPrincipal() {
         Scaffold(modifier = Modifier.fillMaxSize(), containerColor = Color.White) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("MONEDERO SMART", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp))
+                Text("MONEDERO PAOYHAN", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 12.dp))
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(Color(0xFFCDFF33))) {
