@@ -62,12 +62,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // ✅ PASO 1: INICIALIZAR FIREBASE
+        // ✅ INICIALIZAR FIREBASE
         try {
             FirebaseApp.initializeApp(this)
-            Toast.makeText(this, "✅ Firebase inicializado", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@MainActivity, "✅ Firebase inicializado", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            Toast.makeText(this, "❌ ERROR Firebase: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(this@MainActivity, "❌ ERROR Firebase: ${e.message}", Toast.LENGTH_LONG).show()
         }
         
         val db = FirebaseDatabase.getInstance().reference
@@ -89,47 +89,37 @@ class MainActivity : ComponentActivity() {
         
         setContent { PantallaPrincipal() }
         
-        // ✅ PASO 2: ESCUCHAR FIREBASE
-        Toast.makeText(this, "🔍 Escuchando historial...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this@MainActivity, "🔍 Escuchando historial...", Toast.LENGTH_SHORT).show()
         
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                Toast.makeText(this, "📡 Leyendo: ${snapshot.childrenCount} tickets", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "📡 Leyendo: ${snapshot.childrenCount} tickets", Toast.LENGTH_SHORT).show()
                 
                 for (hijo in snapshot.children) {
-                    val codigo = hijo.child("codigo").getValue(String::class.java) ?: ""
                     val leido = hijo.child("leido_por_monedero").getValue(Boolean::class.java)
-                    
-                    // ✅ SI YA FUE LEÍDO → SALTEAR
-                    if (leido == true) {
-                        continue
-                    }
+                    if (leido == true) continue
 
+                    val codigo = hijo.child("codigo").getValue(String::class.java) ?: ""
                     val monto = hijo.child("monto").getValue(Double::class.java) ?: 0.0
                     val fecha = hijo.child("fecha").getValue(String::class.java) ?: ""
 
                     if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
                     if (monto <= 0.0) continue
 
-                    // ✅ MARCAR COMO LEÍDO
                     hijo.ref.child("leido_por_monedero").setValue(true)
                     
-                    Toast.makeText(this, "✅ TICKET LEÍDO: $codigo — S/ $monto", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity, "✅ TICKET LEÍDO: $codigo — S/ $monto", Toast.LENGTH_LONG).show()
 
-                    // ✅ SUMAR
                     val nuevoTotal = leerTotalGuardado() + monto
                     totalGeneral = nuevoTotal
                     guardarTotal(nuevoTotal)
 
-                    // ✅ AGREGAR AL HISTORIAL
                     val nuevoTicket = Movimiento(fecha, "Ticket generado", monto, nuevoTotal, codigo, "")
                     historial = listOf(nuevoTicket) + historial
                     
-                    // ✅ NOTIFICACIÓN + PLING
                     hablarPlingUnaVez()
                     mostrarNotificacion(monto, nuevoTotal)
                     
-                    // ✅ SI LAS DOS LEERON → BORRAR
                     val leidoTicket = hijo.child("leido_por_ticket").getValue(Boolean::class.java) ?: false
                     if (leidoTicket) hijo.ref.removeValue()
                 }
@@ -279,8 +269,10 @@ class MainActivity : ComponentActivity() {
                     totalGeneral = 0.0
                     guardarTotal(0.0)
                     historial = listOf(Movimiento(formatoFecha.format(Date()), "Monedero vaciado", 0.0, 0.0, "")) + historial
-                    Toast.makeText(this, "✅ Vaciado correctamente", Toast.LENGTH_SHORT).show()
-                } else Toast.makeText(this, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, "✅ Vaciado correctamente", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@MainActivity, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
+                }
             }
             .show()
     }
