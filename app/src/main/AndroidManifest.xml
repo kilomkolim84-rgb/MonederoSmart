@@ -27,13 +27,10 @@
         </activity>
 
         <service
-            android:name=".ServicioMonedero"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-        <service
-            android:name=".EscuchaFirebaseService"
-            android:foregroundServiceType="dataSync"
-            android:exported="false" />
+    android:name=".MonederoServicio"
+    android:enabled="true"
+    android:exported="false"
+    android:foregroundServiceType="dataSync" />
 
     </application>
 
