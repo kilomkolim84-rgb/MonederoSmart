@@ -45,6 +45,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.concurrent.TimeUnit
 
 const val CLAVE_VACIADO = "222777"
 const val CANAL_NOTIFICACIONES = "canal_monedero"
@@ -52,6 +53,7 @@ const val CANAL_SERVICIO = "canal_servicio"
 const val ID_NOTIFICACION_SERVICIO = 12345
 const val DISTANCIA_PELIGRO = 8.0    // ⚠️ Menos de 8 km = APAGAR
 const val DISTANCIA_SEGURIDAD = 9.0  // ✅ Más de 9 km = ENCENDER
+const val TIEMPO_ESPERA_CONEXION = 30L // ⏳ Minutos sin respuesta = SISTEMA OFF
 
 data class Movimiento(
     val fechaHora: String = "",
@@ -72,6 +74,7 @@ class MonederoServicio : Service() {
     private val TOTAL_GUARDADO = "total_acumulado"
     private var escuchando: ValueEventListener? = null
     private var sensoresEscucha: ValueEventListener? = null
+    private var estadoSistemaEscucha: ValueEventListener? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -98,6 +101,7 @@ class MonederoServicio : Service() {
 
         escucharFirebase()
         escucharSensores()
+        escucharEstadoSistema()
     }
 
     private fun crearCanalServicio() {
@@ -172,6 +176,23 @@ class MonederoServicio : Service() {
         db.child("sensores").addValueEventListener(sensoresEscucha!!)
     }
 
+    private fun escucharEstadoSistema() {
+        val db = FirebaseDatabase.getInstance().reference
+        estadoSistemaEscucha = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val ultimaConexionStr = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
+                val estado = snapshot.child("estado").getValue(String::class.java) ?: ""
+                
+                prefs.edit()
+                    .putString("ultima_conexion_esp32", ultimaConexionStr)
+                    .putString("estado_sistema", estado)
+                    .apply()
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        }
+        db.child("estado_sistema").addValueEventListener(estadoSistemaEscucha!!)
+    }
+
     private fun mostrarNotificacion(monto: Double, total: Double) {
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -202,6 +223,9 @@ class MonederoServicio : Service() {
         sensoresEscucha?.let {
             FirebaseDatabase.getInstance().reference.child("sensores").removeEventListener(it)
         }
+        estadoSistemaEscucha?.let {
+            FirebaseDatabase.getInstance().reference.child("estado_sistema").removeEventListener(it)
+        }
         tts?.stop()
         tts?.shutdown()
     }
@@ -212,6 +236,7 @@ class MonederoServicio : Service() {
 // ==============================================
 class MainActivity : ComponentActivity() {
     private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
+    private val formatoHoraFirebase = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale("es", "PE"))
     private var tts: TextToSpeech? = null
     private var vozLista = false
     private lateinit var prefs: SharedPreferences
@@ -227,6 +252,8 @@ class MainActivity : ComponentActivity() {
     private var sistemaEncendido by mutableStateOf(true)
     private var cerrojoAbierto by mutableStateOf(false)
     private var ultimaLecturaSensores by mutableStateOf("")
+    private var sistemaActivo by mutableStateOf(false)
+    private var ultimaConexionEsp32 by mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -235,6 +262,7 @@ class MainActivity : ComponentActivity() {
         totalGeneral = leerTotalGuardado()
         cargarHistorialGuardado()
         cargarSensoresGuardados()
+        cargarEstadoSistema()
         
         try {
             FirebaseApp.initializeApp(this)
@@ -298,6 +326,37 @@ class MainActivity : ComponentActivity() {
             }
             override fun onCancelled(e: DatabaseError) {}
         })
+
+        db.child("estado_sistema").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                ultimaConexionEsp32 = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
+                verificarEstadoSistema()
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        })
+    }
+
+    private fun cargarEstadoSistema() {
+        ultimaConexionEsp32 = prefs.getString("ultima_conexion_esp32", "") ?: ""
+        verificarEstadoSistema()
+    }
+
+    private fun verificarEstadoSistema() {
+        if (ultimaConexionEsp32.isEmpty()) {
+            sistemaActivo = false
+            return
+        }
+        
+        try {
+            val fechaUltima = formatoHoraFirebase.parse(ultimaConexionEsp32)
+            val ahora = Date()
+            val diferenciaMs = ahora.time - fechaUltima.time
+            val diferenciaMinutos = TimeUnit.MILLISECONDS.toMinutes(diferenciaMs)
+            
+            sistemaActivo = diferenciaMinutos < TIEMPO_ESPERA_CONEXION
+        } catch (e: Exception) {
+            sistemaActivo = false
+        }
     }
 
     private fun cargarSensoresGuardados() {
@@ -450,7 +509,23 @@ class MainActivity : ComponentActivity() {
     fun PantallaPrincipal() {
         Scaffold(modifier = Modifier.fillMaxSize(), containerColor = Color.White) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("MONEDERO PAOYHAN", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
+                
+                // === TÍTULO + INDICADOR SISTEMA ON/OFF ===
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("MONEDERO PAOYHAN", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    
+                    // 🟢🔴 CUADRADO SISTEMA ON/OFF
+                    val colorSistema = if (sistemaActivo) Color(0xFF4CAF50) else Color(0xFFFF5252)
+                    val textoSistema = if (sistemaActivo) "SISTEMA ON" else "SISTEMA OFF"
+                    Box(modifier = Modifier
+                        .background(colorSistema, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(textoSistema, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // === TARJETAS SUPERIORES: VOLTAJE • TEMPERATURA • RAYOS ===
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
