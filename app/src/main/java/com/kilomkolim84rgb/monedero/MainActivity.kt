@@ -51,9 +51,9 @@ const val CLAVE_VACIADO = "222777"
 const val CANAL_NOTIFICACIONES = "canal_monedero"
 const val CANAL_SERVICIO = "canal_servicio"
 const val ID_NOTIFICACION_SERVICIO = 12345
-const val DISTANCIA_PELIGRO = 8.0    // ⚠️ Menos de 8 km = APAGAR
-const val DISTANCIA_SEGURIDAD = 9.0  // ✅ Más de 9 km = ENCENDER
-const val TIEMPO_ESPERA_CONEXION = 30L // ⏳ Minutos sin respuesta = SISTEMA OFF
+const val DISTANCIA_PELIGRO = 8.0
+const val DISTANCIA_SEGURIDAD = 9.0
+const val TIEMPO_ESPERA_CONEXION = 20L // ⏳ 20 minutos sin respuesta = OFF
 
 data class Movimiento(
     val fechaHora: String = "",
@@ -64,9 +64,6 @@ data class Movimiento(
     val alias: String = ""
 )
 
-// ==============================================
-// 🔵 SERVICIO QUE SE QUEDA ESCUCHANDO SIEMPRE
-// ==============================================
 class MonederoServicio : Service() {
     private var tts: TextToSpeech? = null
     private var vozLista = false
@@ -157,7 +154,7 @@ class MonederoServicio : Service() {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val voltaje = snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0
                 val temperatura = snapshot.child("temperatura").getValue(Double::class.java) ?: 0.0
-                val rayosDistancia = snapshot.child("rayos_distancia").getValue(Double::class.java) ?: 999.0
+                val rayosDistancia = snapshot.child("rayos_km").getValue(Double::class.java) ?: 999.0
                 val sistemaEncendido = snapshot.child("sistema_encendido").getValue(Boolean::class.java) ?: true
                 val cerrojoAbierto = snapshot.child("cerrojo_abierto").getValue(Boolean::class.java) ?: false
                 val fechaHora = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE")).format(Date())
@@ -190,7 +187,7 @@ class MonederoServicio : Service() {
             }
             override fun onCancelled(e: DatabaseError) {}
         }
-        db.child("estado_sistema").addValueEventListener(estadoSistemaEscucha!!)
+        db.child("sistema").addValueEventListener(estadoSistemaEscucha!!)
     }
 
     private fun mostrarNotificacion(monto: Double, total: Double) {
@@ -224,16 +221,13 @@ class MonederoServicio : Service() {
             FirebaseDatabase.getInstance().reference.child("sensores").removeEventListener(it)
         }
         estadoSistemaEscucha?.let {
-            FirebaseDatabase.getInstance().reference.child("estado_sistema").removeEventListener(it)
+            FirebaseDatabase.getInstance().reference.child("sistema").removeEventListener(it)
         }
         tts?.stop()
         tts?.shutdown()
     }
 }
 
-// ==============================================
-// 🟢 ACTIVIDAD PRINCIPAL
-// ==============================================
 class MainActivity : ComponentActivity() {
     private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
     private val formatoHoraFirebase = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale("es", "PE"))
@@ -319,7 +313,7 @@ class MainActivity : ComponentActivity() {
             override fun onDataChange(snapshot: DataSnapshot) {
                 voltaje = snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0
                 temperatura = snapshot.child("temperatura").getValue(Double::class.java) ?: 0.0
-                rayosDistancia = snapshot.child("rayos_distancia").getValue(Double::class.java) ?: 999.0
+                rayosDistancia = snapshot.child("rayos_km").getValue(Double::class.java) ?: 999.0
                 sistemaEncendido = snapshot.child("sistema_encendido").getValue(Boolean::class.java) ?: true
                 cerrojoAbierto = snapshot.child("cerrojo_abierto").getValue(Boolean::class.java) ?: false
                 ultimaLecturaSensores = SimpleDateFormat("dd/MM HH:mm", Locale("es", "PE")).format(Date())
@@ -327,7 +321,7 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(e: DatabaseError) {}
         })
 
-        db.child("estado_sistema").addValueEventListener(object : ValueEventListener {
+        db.child("sistema").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 ultimaConexionEsp32 = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
                 verificarEstadoSistema()
@@ -510,11 +504,9 @@ class MainActivity : ComponentActivity() {
         Scaffold(modifier = Modifier.fillMaxSize(), containerColor = Color.White) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 
-                // === TÍTULO + INDICADOR SISTEMA ON/OFF ===
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("MONEDERO PAOYHAN", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     
-                    // 🟢🔴 CUADRADO SISTEMA ON/OFF
                     val colorSistema = if (sistemaActivo) Color(0xFF4CAF50) else Color(0xFFFF5252)
                     val textoSistema = if (sistemaActivo) "SISTEMA ON" else "SISTEMA OFF"
                     Box(modifier = Modifier
@@ -527,7 +519,6 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // === TARJETAS SUPERIORES: VOLTAJE • TEMPERATURA • RAYOS ===
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFEB3B))) {
                         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -544,7 +535,6 @@ class MainActivity : ComponentActivity() {
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     
-                    // === TARJETA DE RAYOS ===
                     val colorRayos = when {
                         rayosDistancia < DISTANCIA_PELIGRO && !sistemaEncendido -> Color(0xFFFF5252)
                         rayosDistancia < DISTANCIA_PELIGRO -> Color(0xFFFF5252)
@@ -571,7 +561,6 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // === TOTAL ACUMULADO ===
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(Color(0xFFCDFF33))) {
                     Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("TOTAL ACUMULADO", fontSize = 14.sp)
@@ -581,14 +570,12 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // === BOTONES: VACIAR • CERROJO • LIMPIAR ===
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     Button(onClick = { pedirClaveVaciado() }, colors = ButtonDefaults.buttonColors(MaterialTheme.colorScheme.error), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1f)) {
                         Text("VACIAR", fontSize = 12.sp)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     
-                    // === BOTÓN DEL CERROJO — VERDE CERRADO / ROJO ABIERTO ===
                     val colorBotonCerrojo = if (cerrojoAbierto) Color(0xFFFF5252) else Color(0xFF4CAF50)
                     val textoCerrojo = if (cerrojoAbierto) "🔓 ABIERTO" else "🔒 CERRADO"
                     Button(onClick = { alternarCerrojo() }, colors = ButtonDefaults.buttonColors(colorBotonCerrojo), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1.2f)) {
@@ -605,7 +592,6 @@ class MainActivity : ComponentActivity() {
                 Text("Historial", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // === HISTORIAL ===
                 Column(modifier = Modifier.fillMaxWidth().weight(1f).background(Color(0xFFE0F7FF), RoundedCornerShape(12.dp)).padding(8.dp)) {
                     LazyColumn(modifier = Modifier.fillMaxWidth()) {
                         items(historial.size) { posicion ->
