@@ -56,7 +56,7 @@ const val CANAL_SERVICIO = "canal_servicio"
 const val ID_NOTIFICACION_SERVICIO = 12345
 const val DISTANCIA_PELIGRO = 8.0
 const val DISTANCIA_SEGURIDAD = 9.0
-const val TIEMPO_ESPERA_CONEXION = 1L
+const val TIEMPO_ESPERA_CONEXION = 15L // ✅ 15 minutos — tiempo suficiente
 
 data class Movimiento(
     val fechaHora: String = "",
@@ -248,7 +248,7 @@ class MainActivity : ComponentActivity() {
     private var ultimaLecturaSensores by mutableStateOf("")
     private var sistemaActivo by mutableStateOf(false)
     private var ultimaConexionEsp32 by mutableStateOf("")
-    private var cargando by mutableStateOf(false)
+    private var datosExistenEnFirebase by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -283,7 +283,7 @@ class MainActivity : ComponentActivity() {
         setContent { PantallaPrincipal() }
         
         // 🔄 CARGA INMEDIATA AL ABRIR LA APP
-        cargarDatosFirebaseAlInstante()
+        verificarDatosEnFirebase()
         
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -320,6 +320,7 @@ class MainActivity : ComponentActivity() {
                 rayosDistancia = snapshot.child("rayos_km").getValue(Double::class.java) ?: 999.0
                 cerrojoAbierto = snapshot.child("cerrojo_abierto").getValue(Boolean::class.java) ?: false
                 ultimaLecturaSensores = SimpleDateFormat("dd/MM HH:mm", Locale("es", "PE")).format(Date())
+                verificarDatosEnFirebase()
             }
             override fun onCancelled(e: DatabaseError) {}
         })
@@ -327,53 +328,60 @@ class MainActivity : ComponentActivity() {
         db.child("sistema").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 ultimaConexionEsp32 = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
-                verificarEstadoSistema()
+                verificarDatosEnFirebase()
             }
             override fun onCancelled(e: DatabaseError) {}
         })
     }
 
-    // ✅ CARGA TODO DE FIREBASE AL INSTANTE
-    private fun cargarDatosFirebaseAlInstante() {
+    // ✅ LÓGICA DEFINITIVA: Si hay datos → SISTEMA ON, si NO hay → OFF
+    private fun verificarDatosEnFirebase() {
         val db = FirebaseDatabase.getInstance().reference
-        cargando = true
         
-        db.child("sensores").get().addOnSuccessListener { snapshot ->
-            voltaje = snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0
-            temperatura = snapshot.child("temperatura").getValue(Double::class.java) ?: 0.0
-            rayosDistancia = snapshot.child("rayos_km").getValue(Double::class.java) ?: 999.0
-            cerrojoAbierto = snapshot.child("cerrojo_abierto").getValue(Boolean::class.java) ?: false
-            ultimaLecturaSensores = SimpleDateFormat("dd/MM HH:mm", Locale("es", "PE")).format(Date())
-        }
-        
-        db.child("sistema").get().addOnSuccessListener { snapshot ->
-            ultimaConexionEsp32 = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
-            verificarEstadoSistema()
-            cargando = false
+        db.child("sensores").get().addOnSuccessListener { sensoresSnap ->
+            val voltajeFB = sensoresSnap.child("voltaje").getValue(Double::class.java) ?: 0.0
+            val temperaturaFB = sensoresSnap.child("temperatura").getValue(Double::class.java) ?: 0.0
+            
+            db.child("sistema").get().addOnSuccessListener { sistemaSnap ->
+                val ultimaConexionFB = sistemaSnap.child("ultima_conexion").getValue(String::class.java) ?: ""
+                
+                // ✅ ¿HAY DATOS REALES EN FIREBASE?
+                val hayDatos = voltajeFB > 0.0 && temperaturaFB > -100 && ultimaConexionFB.isNotEmpty()
+                datosExistenEnFirebase = hayDatos
+                
+                if (hayDatos) {
+                    // ✅ HAY DATOS → VERIFICAR TIEMPO
+                    ultimaConexionEsp32 = ultimaConexionFB
+                    voltaje = voltajeFB
+                    temperatura = temperaturaFB
+                    rayosDistancia = sensoresSnap.child("rayos_km").getValue(Double::class.java) ?: 999.0
+                    ultimaLecturaSensores = SimpleDateFormat("dd/MM HH:mm", Locale("es", "PE")).format(Date())
+                    
+                    try {
+                        val fechaUltima = formatoHoraFirebase.parse(ultimaConexionFB)
+                        val ahora = Date()
+                        val diferenciaMs = ahora.time - fechaUltima.time
+                        val diferenciaMinutos = TimeUnit.MILLISECONDS.toMinutes(diferenciaMs)
+                        
+                        sistemaActivo = diferenciaMinutos < TIEMPO_ESPERA_CONEXION
+                    } catch (e: Exception) {
+                        sistemaActivo = true // Si hay datos pero falla la fecha → ON por precaución
+                    }
+                } else {
+                    // ❌ NO HAY DATOS → SISTEMA OFF COMPLETO
+                    sistemaActivo = false
+                    voltaje = 0.0
+                    temperatura = 0.0
+                    rayosDistancia = 999.0
+                    ultimaLecturaSensores = ""
+                }
+            }
         }
     }
 
     private fun cargarEstadoSistema() {
         ultimaConexionEsp32 = prefs.getString("ultima_conexion_esp32", "") ?: ""
-        verificarEstadoSistema()
-    }
-
-    private fun verificarEstadoSistema() {
-        if (ultimaConexionEsp32.isEmpty()) {
-            sistemaActivo = false
-            return
-        }
-        
-        try {
-            val fechaUltima = formatoHoraFirebase.parse(ultimaConexionEsp32)
-            val ahora = Date()
-            val diferenciaMs = ahora.time - fechaUltima.time
-            val diferenciaMinutos = TimeUnit.MILLISECONDS.toMinutes(diferenciaMs)
-            
-            sistemaActivo = diferenciaMinutos < TIEMPO_ESPERA_CONEXION
-        } catch (e: Exception) {
-            sistemaActivo = false
-        }
+        verificarDatosEnFirebase()
     }
 
     private fun cargarSensoresGuardados() {
@@ -385,23 +393,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun forzarActualizacionManual() {
-        cargando = true
-        val db = FirebaseDatabase.getInstance().reference
-        
-        db.child("sensores").get().addOnSuccessListener { snapshot ->
-            voltaje = snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0
-            temperatura = snapshot.child("temperatura").getValue(Double::class.java) ?: 0.0
-            rayosDistancia = snapshot.child("rayos_km").getValue(Double::class.java) ?: 999.0
-            cerrojoAbierto = snapshot.child("cerrojo_abierto").getValue(Boolean::class.java) ?: false
-            ultimaLecturaSensores = SimpleDateFormat("dd/MM HH:mm", Locale("es", "PE")).format(Date())
-        }
-        
-        db.child("sistema").get().addOnSuccessListener { snapshot ->
-            ultimaConexionEsp32 = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
-            verificarEstadoSistema()
-            cargando = false
-            Toast.makeText(this, "✅ Actualizado", Toast.LENGTH_SHORT).show()
-        }
+        verificarDatosEnFirebase()
+        Toast.makeText(this, "✅ Actualizado", Toast.LENGTH_SHORT).show()
     }
 
     private fun leerTotalGuardado(): Double = prefs.getFloat(TOTAL_GUARDADO, 0f).toDouble()
@@ -545,8 +538,8 @@ class MainActivity : ComponentActivity() {
     fun PantallaPrincipal() {
         LaunchedEffect(Unit) {
             while (true) {
-                verificarEstadoSistema()
-                delay(30000)
+                verificarDatosEnFirebase()
+                delay(30000) // 30 segundos
             }
         }
 
@@ -589,7 +582,7 @@ class MainActivity : ComponentActivity() {
                         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text("⚡ VOLTAJE", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text(
-                                if (sistemaActivo && voltaje > 0) String.format("%.1f V", voltaje) 
+                                if (voltaje > 0) String.format("%.1f V", voltaje) 
                                 else "—", 
                                 fontSize = 18.sp, 
                                 fontWeight = FontWeight.Bold
@@ -601,7 +594,7 @@ class MainActivity : ComponentActivity() {
                         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text("🌡️ TEMPERATURA", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text(
-                                if (sistemaActivo && temperatura > -100) String.format("%.1f °C", temperatura) 
+                                if (temperatura > -100) String.format("%.1f °C", temperatura) 
                                 else "—", 
                                 fontSize = 18.sp, 
                                 fontWeight = FontWeight.Bold
@@ -616,7 +609,6 @@ class MainActivity : ComponentActivity() {
                         else -> Color(0xFF4CAF50)
                     }
                     val textoRayos = when {
-                        !sistemaActivo -> "-- km ✅"
                         rayosDistancia < DISTANCIA_PELIGRO -> "${String.format("%.0f", rayosDistancia)} km ⚠️"
                         rayosDistancia <= 40.0 -> "${String.format("%.0f", rayosDistancia)} km"
                         else -> "-- km ✅"
@@ -629,9 +621,9 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                if (sistemaActivo && ultimaLecturaSensores.isNotEmpty()) {
+                if (datosExistenEnFirebase && ultimaLecturaSensores.isNotEmpty()) {
                     Text("Última lectura: $ultimaLecturaSensores", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
-                } else if (!sistemaActivo) {
+                } else {
                     Text("Última lectura: Sin conexión", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
                 }
 
