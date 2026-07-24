@@ -56,7 +56,7 @@ const val CANAL_SERVICIO = "canal_servicio"
 const val ID_NOTIFICACION_SERVICIO = 12345
 const val DISTANCIA_PELIGRO = 8.0
 const val DISTANCIA_SEGURIDAD = 9.0
-const val TIEMPO_ESPERA_CONEXION = 1L // ✅ CAMBIADO: 1 minuto sin respuesta = OFF
+const val TIEMPO_ESPERA_CONEXION = 1L
 
 data class Movimiento(
     val fechaHora: String = "",
@@ -158,7 +158,6 @@ class MonederoServicio : Service() {
                 val voltaje = snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0
                 val temperatura = snapshot.child("temperatura").getValue(Double::class.java) ?: 0.0
                 val rayosDistancia = snapshot.child("rayos_km").getValue(Double::class.java) ?: 999.0
-                val sistemaEncendido = snapshot.child("sistema_encendido").getValue(Boolean::class.java) ?: true
                 val cerrojoAbierto = snapshot.child("cerrojo_abierto").getValue(Boolean::class.java) ?: false
                 val fechaHora = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE")).format(Date())
                 
@@ -166,7 +165,6 @@ class MonederoServicio : Service() {
                     .putFloat("ultimo_voltaje", voltaje.toFloat())
                     .putFloat("ultima_temperatura", temperatura.toFloat())
                     .putFloat("rayos_distancia", rayosDistancia.toFloat())
-                    .putBoolean("sistema_encendido", sistemaEncendido)
                     .putBoolean("cerrojo_abierto", cerrojoAbierto)
                     .putString("ultima_lectura_sensores", fechaHora)
                     .apply()
@@ -246,11 +244,11 @@ class MainActivity : ComponentActivity() {
     private var voltaje by mutableStateOf(0.0)
     private var temperatura by mutableStateOf(0.0)
     private var rayosDistancia by mutableStateOf(999.0)
-    private var sistemaEncendido by mutableStateOf(true)
     private var cerrojoAbierto by mutableStateOf(false)
     private var ultimaLecturaSensores by mutableStateOf("")
     private var sistemaActivo by mutableStateOf(false)
     private var ultimaConexionEsp32 by mutableStateOf("")
+    private var cargando by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -283,6 +281,9 @@ class MainActivity : ComponentActivity() {
         pedirPermisoNotificaciones()
         
         setContent { PantallaPrincipal() }
+        
+        // 🔄 CARGA INMEDIATA AL ABRIR LA APP
+        cargarDatosFirebaseAlInstante()
         
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -317,7 +318,6 @@ class MainActivity : ComponentActivity() {
                 voltaje = snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0
                 temperatura = snapshot.child("temperatura").getValue(Double::class.java) ?: 0.0
                 rayosDistancia = snapshot.child("rayos_km").getValue(Double::class.java) ?: 999.0
-                sistemaEncendido = snapshot.child("sistema_encendido").getValue(Boolean::class.java) ?: true
                 cerrojoAbierto = snapshot.child("cerrojo_abierto").getValue(Boolean::class.java) ?: false
                 ultimaLecturaSensores = SimpleDateFormat("dd/MM HH:mm", Locale("es", "PE")).format(Date())
             }
@@ -331,6 +331,26 @@ class MainActivity : ComponentActivity() {
             }
             override fun onCancelled(e: DatabaseError) {}
         })
+    }
+
+    // ✅ CARGA TODO DE FIREBASE AL INSTANTE
+    private fun cargarDatosFirebaseAlInstante() {
+        val db = FirebaseDatabase.getInstance().reference
+        cargando = true
+        
+        db.child("sensores").get().addOnSuccessListener { snapshot ->
+            voltaje = snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0
+            temperatura = snapshot.child("temperatura").getValue(Double::class.java) ?: 0.0
+            rayosDistancia = snapshot.child("rayos_km").getValue(Double::class.java) ?: 999.0
+            cerrojoAbierto = snapshot.child("cerrojo_abierto").getValue(Boolean::class.java) ?: false
+            ultimaLecturaSensores = SimpleDateFormat("dd/MM HH:mm", Locale("es", "PE")).format(Date())
+        }
+        
+        db.child("sistema").get().addOnSuccessListener { snapshot ->
+            ultimaConexionEsp32 = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
+            verificarEstadoSistema()
+            cargando = false
+        }
     }
 
     private fun cargarEstadoSistema() {
@@ -360,27 +380,28 @@ class MainActivity : ComponentActivity() {
         voltaje = prefs.getFloat("ultimo_voltaje", 0f).toDouble()
         temperatura = prefs.getFloat("ultima_temperatura", 0f).toDouble()
         rayosDistancia = prefs.getFloat("rayos_distancia", 999f).toDouble()
-        sistemaEncendido = prefs.getBoolean("sistema_encendido", true)
         cerrojoAbierto = prefs.getBoolean("cerrojo_abierto", false)
         ultimaLecturaSensores = prefs.getString("ultima_lectura_sensores", "") ?: ""
     }
 
     private fun forzarActualizacionManual() {
-        cargarEstadoSistema()
-        cargarSensoresGuardados()
-        verificarEstadoSistema()
+        cargando = true
         val db = FirebaseDatabase.getInstance().reference
-        db.child("sistema").get().addOnSuccessListener { snapshot ->
-            ultimaConexionEsp32 = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
-            verificarEstadoSistema()
-        }
+        
         db.child("sensores").get().addOnSuccessListener { snapshot ->
             voltaje = snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0
             temperatura = snapshot.child("temperatura").getValue(Double::class.java) ?: 0.0
             rayosDistancia = snapshot.child("rayos_km").getValue(Double::class.java) ?: 999.0
+            cerrojoAbierto = snapshot.child("cerrojo_abierto").getValue(Boolean::class.java) ?: false
             ultimaLecturaSensores = SimpleDateFormat("dd/MM HH:mm", Locale("es", "PE")).format(Date())
         }
-        Toast.makeText(this, "✅ Actualizado", Toast.LENGTH_SHORT).show()
+        
+        db.child("sistema").get().addOnSuccessListener { snapshot ->
+            ultimaConexionEsp32 = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
+            verificarEstadoSistema()
+            cargando = false
+            Toast.makeText(this, "✅ Actualizado", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun leerTotalGuardado(): Double = prefs.getFloat(TOTAL_GUARDADO, 0f).toDouble()
@@ -522,11 +543,10 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun PantallaPrincipal() {
-        // ⏰ ACTUALIZACIÓN AUTOMÁTICA CADA 30 SEGUNDOS
         LaunchedEffect(Unit) {
             while (true) {
                 verificarEstadoSistema()
-                delay(30000) // 30 segundos
+                delay(30000)
             }
         }
 
@@ -591,14 +611,12 @@ class MainActivity : ComponentActivity() {
                     Spacer(modifier = Modifier.width(8.dp))
                     
                     val colorRayos = when {
-                        rayosDistancia < DISTANCIA_PELIGRO && !sistemaEncendido -> Color(0xFFFF5252)
                         rayosDistancia < DISTANCIA_PELIGRO -> Color(0xFFFF5252)
                         rayosDistancia <= 40.0 -> Color(0xFFFFC107)
                         else -> Color(0xFF4CAF50)
                     }
                     val textoRayos = when {
                         !sistemaActivo -> "-- km ✅"
-                        rayosDistancia < DISTANCIA_PELIGRO && !sistemaEncendido -> "${String.format("%.0f", rayosDistancia)} km 🔴 APAGADO"
                         rayosDistancia < DISTANCIA_PELIGRO -> "${String.format("%.0f", rayosDistancia)} km ⚠️"
                         rayosDistancia <= 40.0 -> "${String.format("%.0f", rayosDistancia)} km"
                         else -> "-- km ✅"
