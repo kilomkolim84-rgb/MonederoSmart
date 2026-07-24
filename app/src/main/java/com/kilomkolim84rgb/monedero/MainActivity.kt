@@ -523,14 +523,24 @@ class MainActivity : ComponentActivity() {
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFEB3B))) {
                         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text("⚡ VOLTAJE", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text(if (voltaje > 0) String.format("%.1f V", voltaje) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                if (sistemaActivo && voltaje > 0) String.format("%.1f V", voltaje) 
+                                else "—", 
+                                fontSize = 18.sp, 
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFCC80))) {
                         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text("🌡️ TEMPERATURA", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text(if (temperatura > -100) String.format("%.1f °C", temperatura) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                if (sistemaActivo && temperatura > -100) String.format("%.1f °C", temperatura) 
+                                else "—", 
+                                fontSize = 18.sp, 
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                     Spacer(modifier = Modifier.width(8.dp))
@@ -542,6 +552,7 @@ class MainActivity : ComponentActivity() {
                         else -> Color(0xFF4CAF50)
                     }
                     val textoRayos = when {
+                        !sistemaActivo -> "-- km ✅"
                         rayosDistancia < DISTANCIA_PELIGRO && !sistemaEncendido -> "${String.format("%.0f", rayosDistancia)} km 🔴 APAGADO"
                         rayosDistancia < DISTANCIA_PELIGRO -> "${String.format("%.0f", rayosDistancia)} km ⚠️"
                         rayosDistancia <= 40.0 -> "${String.format("%.0f", rayosDistancia)} km"
@@ -555,8 +566,10 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                if (ultimaLecturaSensores.isNotEmpty()) {
+                if (sistemaActivo && ultimaLecturaSensores.isNotEmpty()) {
                     Text("Última lectura: $ultimaLecturaSensores", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
+                } else if (!sistemaActivo) {
+                    Text("Última lectura: Sin conexión", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
