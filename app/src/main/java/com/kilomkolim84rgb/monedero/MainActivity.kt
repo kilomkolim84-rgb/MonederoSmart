@@ -251,7 +251,6 @@ class MainActivity : ComponentActivity() {
     private var ultimaLecturaSensores by mutableStateOf("")
     private var sistemaActivo by mutableStateOf(false)
     private var ultimaConexionEsp32 by mutableStateOf("")
-    private var isRefreshing by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -328,7 +327,7 @@ class MainActivity : ComponentActivity() {
         db.child("sistema").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 ultimaConexionEsp32 = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
-                verificarEstadoSistema() // ✅ ACTUALIZA EN TIEMPO REAL
+                verificarEstadoSistema()
             }
             override fun onCancelled(e: DatabaseError) {}
         })
@@ -367,11 +366,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun forzarActualizacionManual() {
-        isRefreshing = true
         cargarEstadoSistema()
         cargarSensoresGuardados()
         verificarEstadoSistema()
-        // Volvemos a leer Firebase al instante
         val db = FirebaseDatabase.getInstance().reference
         db.child("sistema").get().addOnSuccessListener { snapshot ->
             ultimaConexionEsp32 = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
@@ -384,7 +381,6 @@ class MainActivity : ComponentActivity() {
             ultimaLecturaSensores = SimpleDateFormat("dd/MM HH:mm", Locale("es", "PE")).format(Date())
         }
         Toast.makeText(this, "✅ Actualizado", Toast.LENGTH_SHORT).show()
-        isRefreshing = false
     }
 
     private fun leerTotalGuardado(): Double = prefs.getFloat(TOTAL_GUARDADO, 0f).toDouble()
@@ -526,7 +522,7 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun PantallaPrincipal() {
-        // ⏰ ACTUALIZACIÓN AUTOMÁTICA CADA 30 SEGUNDOS MIENTRAS LA APP ESTÁ ABIERTA
+        // ⏰ ACTUALIZACIÓN AUTOMÁTICA CADA 30 SEGUNDOS
         LaunchedEffect(Unit) {
             while (true) {
                 verificarEstadoSistema()
@@ -534,147 +530,150 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            containerColor = Color.White
-        ) { padding ->
-            // 👇 JALAR HACIA ABAJO PARA REFRESCAR
-            PullToRefreshContainer(
-                state = rememberPullToRefreshState(),
-                onRefresh = { forzarActualizacionManual() }
+        Scaffold(modifier = Modifier.fillMaxSize(), containerColor = Color.White) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .padding(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                // 👇 BOTÓN DE REFRESCO MANUAL
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Text("MONEDERO PAOYHAN", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("MONEDERO PAOYHAN", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         val colorSistema = if (sistemaActivo) Color(0xFF4CAF50) else Color(0xFFFF5252)
                         val textoSistema = if (sistemaActivo) "SISTEMA ON" else "SISTEMA OFF"
-                        Box(modifier = Modifier
-                            .background(colorSistema, RoundedCornerShape(6.dp))
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                        Box(
+                            modifier = Modifier
+                                .background(colorSistema, RoundedCornerShape(6.dp))
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Text(textoSistema, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFEB3B))) {
-                            Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                Text("⚡ VOLTAJE", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                Text(
-                                    if (sistemaActivo && voltaje > 0) String.format("%.1f V", voltaje) 
-                                    else "—", 
-                                    fontSize = 18.sp, 
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFCC80))) {
-                            Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                Text("🌡️ TEMPERATURA", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                Text(
-                                    if (sistemaActivo && temperatura > -100) String.format("%.1f °C", temperatura) 
-                                    else "—", 
-                                    fontSize = 18.sp, 
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
                         
-                        val colorRayos = when {
-                            rayosDistancia < DISTANCIA_PELIGRO && !sistemaEncendido -> Color(0xFFFF5252)
-                            rayosDistancia < DISTANCIA_PELIGRO -> Color(0xFFFF5252)
-                            rayosDistancia <= 40.0 -> Color(0xFFFFC107)
-                            else -> Color(0xFF4CAF50)
-                        }
-                        val textoRayos = when {
-                            !sistemaActivo -> "-- km ✅"
-                            rayosDistancia < DISTANCIA_PELIGRO && !sistemaEncendido -> "${String.format("%.0f", rayosDistancia)} km 🔴 APAGADO"
-                            rayosDistancia < DISTANCIA_PELIGRO -> "${String.format("%.0f", rayosDistancia)} km ⚠️"
-                            rayosDistancia <= 40.0 -> "${String.format("%.0f", rayosDistancia)} km"
-                            else -> "-- km ✅"
-                        }
-                        Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(colorRayos)) {
-                            Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                Text("⚠️ RAYOS", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                Text(textoRayos, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            }
+                        // 👇 BOTÓN DE REFRESCO
+                        IconButton(onClick = { forzarActualizacionManual() }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Actualizar")
                         }
                     }
+                }
 
-                    if (sistemaActivo && ultimaLecturaSensores.isNotEmpty()) {
-                        Text("Última lectura: $ultimaLecturaSensores", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
-                    } else if (!sistemaActivo) {
-                        Text("Última lectura: Sin conexión", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
-                    }
+                Spacer(modifier = Modifier.height(12.dp))
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(Color(0xFFCDFF33))) {
-                        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("TOTAL ACUMULADO", fontSize = 14.sp)
-                            Text(String.format("%.2f SOLES", totalGeneral), fontSize = 36.sp, fontWeight = FontWeight.Bold)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFEB3B))) {
+                        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Text("⚡ VOLTAJE", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                if (sistemaActivo && voltaje > 0) String.format("%.1f V", voltaje) 
+                                else "—", 
+                                fontSize = 18.sp, 
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        Button(onClick = { pedirClaveVaciado() }, colors = ButtonDefaults.buttonColors(MaterialTheme.colorScheme.error), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1f)) {
-                            Text("VACIAR", fontSize = 12.sp)
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        
-                        val colorBotonCerrojo = if (cerrojoAbierto) Color(0xFFFF5252) else Color(0xFF4CAF50)
-                        val textoCerrojo = if (cerrojoAbierto) "🔓 ABIERTO" else "🔒 CERRADO"
-                        Button(onClick = { alternarCerrojo() }, colors = ButtonDefaults.buttonColors(colorBotonCerrojo), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1.2f)) {
-                            Text(textoCerrojo, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
-                        
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Button(onClick = { limpiarHistorial() }, colors = ButtonDefaults.buttonColors(Color(0xFF1976D2)), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1f)) {
-                            Text("LIMPIAR", fontSize = 12.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFCC80))) {
+                        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Text("🌡️ TEMPERATURA", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                if (sistemaActivo && temperatura > -100) String.format("%.1f °C", temperatura) 
+                                else "—", 
+                                fontSize = 18.sp, 
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    
+                    val colorRayos = when {
+                        rayosDistancia < DISTANCIA_PELIGRO && !sistemaEncendido -> Color(0xFFFF5252)
+                        rayosDistancia < DISTANCIA_PELIGRO -> Color(0xFFFF5252)
+                        rayosDistancia <= 40.0 -> Color(0xFFFFC107)
+                        else -> Color(0xFF4CAF50)
+                    }
+                    val textoRayos = when {
+                        !sistemaActivo -> "-- km ✅"
+                        rayosDistancia < DISTANCIA_PELIGRO && !sistemaEncendido -> "${String.format("%.0f", rayosDistancia)} km 🔴 APAGADO"
+                        rayosDistancia < DISTANCIA_PELIGRO -> "${String.format("%.0f", rayosDistancia)} km ⚠️"
+                        rayosDistancia <= 40.0 -> "${String.format("%.0f", rayosDistancia)} km"
+                        else -> "-- km ✅"
+                    }
+                    Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(colorRayos)) {
+                        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Text("⚠️ RAYOS", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(textoRayos, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
 
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("Historial", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    Spacer(modifier = Modifier.height(6.dp))
+                if (sistemaActivo && ultimaLecturaSensores.isNotEmpty()) {
+                    Text("Última lectura: $ultimaLecturaSensores", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
+                } else if (!sistemaActivo) {
+                    Text("Última lectura: Sin conexión", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
+                }
 
-                    Column(modifier = Modifier.fillMaxWidth().weight(1f).background(Color(0xFFE0F7FF), RoundedCornerShape(12.dp)).padding(8.dp)) {
-                        LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                            items(historial.size) { posicion ->
-                                val mov = historial[posicion]
-                                val textoAlias = if(mov.alias.isNotEmpty()) mov.alias else "DESCONOCIDO"
-                                val colorAlias = if(mov.alias.isNotEmpty()) Color(0xFF1976D2) else Color(0xFFFF9800)
-                                val textoMonto = formatearMonto(mov.montoIngresado)
+                Spacer(modifier = Modifier.height(16.dp))
 
-                                Card(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), shape = RoundedCornerShape(8.dp)) {
-                                    Row(modifier = Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                                            Card(modifier = Modifier.size(45.dp), shape = RoundedCornerShape(6.dp)) { Box(contentAlignment = Alignment.Center) { Text("📷", fontSize = 18.sp) } }
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Column {
-                                                Text(textoAlias, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = colorAlias, modifier = Modifier.clickable { ponerAlias(posicion) })
-                                                Text(mov.fechaHora, fontSize = 11.sp, color = Color.Gray)
-                                                if(mov.codigo.isNotEmpty()) Text("Ticket creado", fontSize = 12.sp, color = Color(0xFF4CAF50))
-                                            }
+                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(Color(0xFFCDFF33))) {
+                    Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("TOTAL ACUMULADO", fontSize = 14.sp)
+                        Text(String.format("%.2f SOLES", totalGeneral), fontSize = 36.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Button(onClick = { pedirClaveVaciado() }, colors = ButtonDefaults.buttonColors(MaterialTheme.colorScheme.error), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1f)) {
+                        Text("VACIAR", fontSize = 12.sp)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    
+                    val colorBotonCerrojo = if (cerrojoAbierto) Color(0xFFFF5252) else Color(0xFF4CAF50)
+                    val textoCerrojo = if (cerrojoAbierto) "🔓 ABIERTO" else "🔒 CERRADO"
+                    Button(onClick = { alternarCerrojo() }, colors = ButtonDefaults.buttonColors(colorBotonCerrojo), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1.2f)) {
+                        Text(textoCerrojo, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                    
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Button(onClick = { limpiarHistorial() }, colors = ButtonDefaults.buttonColors(Color(0xFF1976D2)), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1f)) {
+                        Text("LIMPIAR", fontSize = 12.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Historial", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Column(modifier = Modifier.fillMaxWidth().weight(1f).background(Color(0xFFE0F7FF), RoundedCornerShape(12.dp)).padding(8.dp)) {
+                    LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                        items(historial.size) { posicion ->
+                            val mov = historial[posicion]
+                            val textoAlias = if(mov.alias.isNotEmpty()) mov.alias else "DESCONOCIDO"
+                            val colorAlias = if(mov.alias.isNotEmpty()) Color(0xFF1976D2) else Color(0xFFFF9800)
+                            val textoMonto = formatearMonto(mov.montoIngresado)
+
+                            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), shape = RoundedCornerShape(8.dp)) {
+                                Row(modifier = Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                        Card(modifier = Modifier.size(45.dp), shape = RoundedCornerShape(6.dp)) { Box(contentAlignment = Alignment.Center) { Text("📷", fontSize = 18.sp) } }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(textoAlias, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = colorAlias, modifier = Modifier.clickable { ponerAlias(posicion) })
+                                            Text(mov.fechaHora, fontSize = 11.sp, color = Color.Gray)
+                                            if(mov.codigo.isNotEmpty()) Text("Ticket creado", fontSize = 12.sp, color = Color(0xFF4CAF50))
                                         }
-                                        Column(horizontalAlignment = Alignment.End) {
-                                            if(mov.codigo.isNotEmpty()) Text("CÓDIGO: ${mov.codigo}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
-                                            if(mov.montoIngresado > 0) Text(textoMonto, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
-                                        }
+                                    }
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        if(mov.codigo.isNotEmpty()) Text("CÓDIGO: ${mov.codigo}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
+                                        if(mov.montoIngresado > 0) Text(textoMonto, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
                                     }
                                 }
                             }
