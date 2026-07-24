@@ -56,7 +56,7 @@ const val CANAL_SERVICIO = "canal_servicio"
 const val ID_NOTIFICACION_SERVICIO = 12345
 const val DISTANCIA_PELIGRO = 8.0
 const val DISTANCIA_SEGURIDAD = 9.0
-const val TIEMPO_ESPERA_CONEXION = 5L // ⏳ 5 minutos sin respuesta = OFF
+const val TIEMPO_ESPERA_CONEXION = 1L // ✅ CAMBIADO: 1 minuto sin respuesta = OFF
 
 data class Movimiento(
     val fechaHora: String = "",
@@ -538,7 +538,6 @@ class MainActivity : ComponentActivity() {
                     .padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // 👇 BOTÓN DE REFRESCO MANUAL
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -557,7 +556,6 @@ class MainActivity : ComponentActivity() {
                             Text(textoSistema, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
                         
-                        // 👇 BOTÓN DE REFRESCO
                         IconButton(onClick = { forzarActualizacionManual() }) {
                             Icon(Icons.Default.Refresh, contentDescription = "Actualizar")
                         }
