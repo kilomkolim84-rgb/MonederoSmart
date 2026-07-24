@@ -51,14 +51,14 @@ import java.util.*
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.delay
 
-const val CLAVE_VACIADO_A = "222777"  // ✅ 3 veces 2 + 3 veces 7
-const val CLAVE_VACIADO_B = "333888"  // ✅ Clave propia del Monedero B
+const val CLAVE_VACIADO_A = "222777"
+const val CLAVE_VACIADO_B = "333888"
 const val CANAL_NOTIFICACIONES = "canal_monedero"
 const val CANAL_SERVICIO = "canal_servicio"
 const val ID_NOTIFICACION_SERVICIO = 12345
 const val DISTANCIA_PELIGRO = 8.0
 const val DISTANCIA_SEGURIDAD = 9.0
-const val TIEMPO_ESPERA_CONEXION = 2L
+const val TIEMPO_ESPERA_CONEXION = 2L  // ✅ 2 minutos exactos
 
 data class Movimiento(
     val monedero: String = "A",
@@ -454,11 +454,10 @@ class MainActivity : ComponentActivity() {
         verificarEstadoSistemaB()
     }
 
-    // 👁️ FUNCIÓN CON OJILLO PARA AMBOS MONEDEROS
     private fun pedirClaveVaciado(monedero: String, claveCorrecta: String, onConfirmar: () -> Unit) {
         val campoClave = EditText(this)
         campoClave.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
-        campoClave.filters = arrayOf(InputFilter.LengthFilter(6)) // ✅ 6 dígitos exactos
+        campoClave.filters = arrayOf(InputFilter.LengthFilter(6))
 
         val contenedor = LinearLayout(this)
         contenedor.orientation = LinearLayout.HORIZONTAL
@@ -469,7 +468,6 @@ class MainActivity : ComponentActivity() {
         )
         campoClave.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
 
-        // 👁️ BOTÓN OJILLO PARA VER/OCULTAR
         val botonOjo = ImageButton(this)
         botonOjo.setImageResource(android.R.drawable.ic_menu_view)
         botonOjo.setBackgroundColor(android.graphics.Color.TRANSPARENT)
@@ -615,23 +613,25 @@ class MainActivity : ComponentActivity() {
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFEB3B))) {
                         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text("⚡ VOLTAJE", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text(if (voltaje > 0) String.format("%.1f V", voltaje) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            Text(if (sistemaAActivo && voltaje > 0) String.format("%.1f V", voltaje) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFCC80))) {
                         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text("🌡️ TEMPERATURA", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text(if (temperatura > -100) String.format("%.1f °C", temperatura) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            Text(if (sistemaAActivo && temperatura > -100) String.format("%.1f °C", temperatura) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     val colorRayos = when {
+                        !sistemaAActivo -> Color(0xFF4CAF50)
                         rayosDistancia < DISTANCIA_PELIGRO -> Color(0xFFFF5252)
                         rayosDistancia <= 40.0 -> Color(0xFFFFC107)
                         else -> Color(0xFF4CAF50)
                     }
                     val textoRayos = when {
+                        !sistemaAActivo -> "-- km ✅"
                         rayosDistancia < DISTANCIA_PELIGRO -> "${String.format("%.0f", rayosDistancia)} km ⚠️"
                         rayosDistancia <= 40.0 -> "${String.format("%.0f", rayosDistancia)} km"
                         else -> "-- km ✅"
@@ -644,7 +644,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                if (ultimaLecturaSensores.isNotEmpty()) {
+                if (sistemaAActivo && ultimaLecturaSensores.isNotEmpty()) {
                     Text("Última lectura: $ultimaLecturaSensores", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
                 }
 
