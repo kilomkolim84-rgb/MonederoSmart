@@ -31,7 +31,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
@@ -56,7 +55,7 @@ const val CANAL_SERVICIO = "canal_servicio"
 const val ID_NOTIFICACION_SERVICIO = 12345
 const val DISTANCIA_PELIGRO = 8.0
 const val DISTANCIA_SEGURIDAD = 9.0
-const val TIEMPO_LIMITE_MINUTOS = 3  // ✅ SI PASA DE 3 MINUTOS SIN SEÑAL → OFF
+const val TIEMPO_LIMITE_MINUTOS = 3
 
 data class Movimiento(
     val monedero: String = "A",
@@ -192,14 +191,10 @@ class MonederoServicio : Service() {
         val db = FirebaseDatabase.getInstance().reference
         sensoresEscucha = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val voltaje = snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0
-                val temperatura = snapshot.child("temperatura").getValue(Double::class.java) ?: 0.0
-                val rayosDistancia = snapshot.child("rayos_km").getValue(Double::class.java) ?: 999.0
-                
                 prefs.edit()
-                    .putFloat("ultimo_voltaje", voltaje.toFloat())
-                    .putFloat("ultima_temperatura", temperatura.toFloat())
-                    .putFloat("rayos_distancia", rayosDistancia.toFloat())
+                    .putFloat("ultimo_voltaje", (snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0).toFloat())
+                    .putFloat("ultima_temperatura", (snapshot.child("temperatura").getValue(Double::class.java) ?: 0.0).toFloat())
+                    .putFloat("rayos_distancia", (snapshot.child("rayos_km").getValue(Double::class.java) ?: 999.0).toFloat())
                     .putBoolean("tiene_voltaje", snapshot.hasChild("voltaje"))
                     .putBoolean("tiene_temperatura", snapshot.hasChild("temperatura"))
                     .putBoolean("tiene_rayos", snapshot.hasChild("rayos_km"))
@@ -214,11 +209,9 @@ class MonederoServicio : Service() {
         val db = FirebaseDatabase.getInstance().reference
         sistemaAEscucha = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val estado = snapshot.child("estado").getValue(String::class.java) ?: ""
-                val ultimaConexion = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
                 prefs.edit()
-                    .putString("estado_a", estado)
-                    .putString("ultima_conexion_a", ultimaConexion)
+                    .putString("estado_a", snapshot.child("estado").getValue(String::class.java) ?: "")
+                    .putString("ultima_conexion_a", snapshot.child("ultima_conexion").getValue(String::class.java) ?: "")
                     .apply()
             }
             override fun onCancelled(e: DatabaseError) {}
@@ -230,8 +223,7 @@ class MonederoServicio : Service() {
         val db = FirebaseDatabase.getInstance().reference
         sistemaBEscucha = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val estado = snapshot.child("estado").getValue(String::class.java) ?: ""
-                prefs.edit().putString("estado_b", estado).apply()
+                prefs.edit().putString("estado_b", snapshot.child("estado").getValue(String::class.java) ?: "").apply()
             }
             override fun onCancelled(e: DatabaseError) {}
         }
@@ -390,16 +382,15 @@ class MainActivity : ComponentActivity() {
 
         db.child("monederoB/sistema").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val estado = snapshot.child("estado").getValue(String::class.java) ?: ""
-                sistemaBActivo = estado == "ON"
+                sistemaBActivo = snapshot.child("estado").getValue(String::class.java) == "ON"
             }
             override fun onCancelled(e: DatabaseError) {}
         })
     }
 
-    // ✅ LÓGICA PRINCIPAL: SI PASA DE 3 MINUTOS → OFF
+    // ✅ LÓGICA DEFINITIVA: SI PASA DE 3 MINUTOS → OFF
     private fun actualizarEstadoSistema() {
-        sistemaAActivo = if (estadoSistemaA != "ON") {
+        sistemaAActivo = if (estadoSistemaA != "ON" || ultimaConexionA.isBlank()) {
             false
         } else {
             val formato = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale("es", "PE"))
@@ -558,10 +549,11 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun PantallaPrincipal() {
-        LaunchedEffect(ultimaConexionA) {
+        // ✅ REVISA EL TIEMPO AUTOMÁTICO CADA 30 SEGUNDOS
+        LaunchedEffect(Unit) {
             while (true) {
                 actualizarEstadoSistema()
-                delay(30000) // Revisa cada 30 segundos
+                delay(30000)
             }
         }
 
