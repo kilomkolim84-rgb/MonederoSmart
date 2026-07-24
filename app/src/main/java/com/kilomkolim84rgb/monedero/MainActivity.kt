@@ -56,9 +56,10 @@ const val CANAL_SERVICIO = "canal_servicio"
 const val ID_NOTIFICACION_SERVICIO = 12345
 const val DISTANCIA_PELIGRO = 8.0
 const val DISTANCIA_SEGURIDAD = 9.0
-const val TIEMPO_ESPERA_CONEXION = 15L // ✅ 15 minutos — tiempo suficiente
+const val TIEMPO_ESPERA_CONEXION = 15L
 
 data class Movimiento(
+    val monedero: String = "A", // A o B
     val fechaHora: String = "",
     val detalle: String = "",
     val montoIngresado: Double = 0.0,
@@ -71,10 +72,13 @@ class MonederoServicio : Service() {
     private var tts: TextToSpeech? = null
     private var vozLista = false
     private lateinit var prefs: SharedPreferences
-    private val TOTAL_GUARDADO = "total_acumulado"
-    private var escuchando: ValueEventListener? = null
+    private val TOTAL_A = "total_acumulado_a"
+    private val TOTAL_B = "total_acumulado_b"
+    private var escuchandoA: ValueEventListener? = null
+    private var escuchandoB: ValueEventListener? = null
     private var sensoresEscucha: ValueEventListener? = null
-    private var estadoSistemaEscucha: ValueEventListener? = null
+    private var sistemaAEscucha: ValueEventListener? = null
+    private var sistemaBEscucha: ValueEventListener? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -99,9 +103,11 @@ class MonederoServicio : Service() {
             .build()
         startForeground(ID_NOTIFICACION_SERVICIO, notificacion)
 
-        escucharFirebase()
+        escucharHistorialA()
+        escucharHistorialB()
         escucharSensores()
-        escucharEstadoSistema()
+        escucharSistemaA()
+        escucharSistemaB()
     }
 
     private fun crearCanalServicio() {
@@ -112,15 +118,14 @@ class MonederoServicio : Service() {
         }
     }
 
-    private fun escucharFirebase() {
+    private fun escucharHistorialA() {
         val db = FirebaseDatabase.getInstance().reference
         db.keepSynced(true)
 
-        escuchando = object : ValueEventListener {
+        escuchandoA = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (nivel1 in snapshot.children) {
                     for (nivel2 in nivel1.children) {
-                        
                         val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
                         val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
                         val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
@@ -132,13 +137,12 @@ class MonederoServicio : Service() {
 
                         nivel2.ref.child("leido_por_monedero").setValue(true)
 
-                        val totalActual = prefs.getFloat(TOTAL_GUARDADO, 0f).toDouble()
+                        val totalActual = prefs.getFloat(TOTAL_A, 0f).toDouble()
                         val nuevoTotal = totalActual + monto
-                        prefs.edit().putFloat(TOTAL_GUARDADO, nuevoTotal.toFloat()).apply()
+                        prefs.edit().putFloat(TOTAL_A, nuevoTotal.toFloat()).apply()
 
                         if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
-
-                        mostrarNotificacion(monto, nuevoTotal)
+                        mostrarNotificacion("A", monto, nuevoTotal)
 
                         val leidoTicket = nivel2.child("leido_por_ticket").getValue(Boolean::class.java) ?: false
                         if (leidoTicket) nivel2.ref.removeValue()
@@ -147,8 +151,41 @@ class MonederoServicio : Service() {
             }
             override fun onCancelled(e: DatabaseError) {}
         }
+        db.child("historial").addValueEventListener(escuchandoA!!)
+    }
 
-        db.child("historial").addValueEventListener(escuchando!!)
+    private fun escucharHistorialB() {
+        val db = FirebaseDatabase.getInstance().reference
+        escuchandoB = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                for (nivel1 in snapshot.children) {
+                    for (nivel2 in nivel1.children) {
+                        val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
+                        val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
+                        val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
+                        val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+                        
+                        if (leido == true) continue
+                        if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
+                        if (monto <= 0.0) continue
+
+                        nivel2.ref.child("leido_por_monedero").setValue(true)
+
+                        val totalActual = prefs.getFloat(TOTAL_B, 0f).toDouble()
+                        val nuevoTotal = totalActual + monto
+                        prefs.edit().putFloat(TOTAL_B, nuevoTotal.toFloat()).apply()
+
+                        if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
+                        mostrarNotificacion("B", monto, nuevoTotal)
+
+                        val leidoTicket = nivel2.child("leido_por_ticket").getValue(Boolean::class.java) ?: false
+                        if (leidoTicket) nivel2.ref.removeValue()
+                    }
+                }
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        }
+        db.child("monederoB/historial").addValueEventListener(escuchandoB!!)
     }
 
     private fun escucharSensores() {
@@ -158,14 +195,12 @@ class MonederoServicio : Service() {
                 val voltaje = snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0
                 val temperatura = snapshot.child("temperatura").getValue(Double::class.java) ?: 0.0
                 val rayosDistancia = snapshot.child("rayos_km").getValue(Double::class.java) ?: 999.0
-                val cerrojoAbierto = snapshot.child("cerrojo_abierto").getValue(Boolean::class.java) ?: false
                 val fechaHora = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE")).format(Date())
                 
                 prefs.edit()
                     .putFloat("ultimo_voltaje", voltaje.toFloat())
                     .putFloat("ultima_temperatura", temperatura.toFloat())
                     .putFloat("rayos_distancia", rayosDistancia.toFloat())
-                    .putBoolean("cerrojo_abierto", cerrojoAbierto)
                     .putString("ultima_lectura_sensores", fechaHora)
                     .apply()
             }
@@ -174,32 +209,39 @@ class MonederoServicio : Service() {
         db.child("sensores").addValueEventListener(sensoresEscucha!!)
     }
 
-    private fun escucharEstadoSistema() {
+    private fun escucharSistemaA() {
         val db = FirebaseDatabase.getInstance().reference
-        estadoSistemaEscucha = object : ValueEventListener {
+        sistemaAEscucha = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val ultimaConexionStr = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
-                val estado = snapshot.child("estado").getValue(String::class.java) ?: ""
-                
-                prefs.edit()
-                    .putString("ultima_conexion_esp32", ultimaConexionStr)
-                    .putString("estado_sistema", estado)
-                    .apply()
+                val ultimaConexion = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
+                prefs.edit().putString("ultima_conexion_a", ultimaConexion).apply()
             }
             override fun onCancelled(e: DatabaseError) {}
         }
-        db.child("sistema").addValueEventListener(estadoSistemaEscucha!!)
+        db.child("sistema").addValueEventListener(sistemaAEscucha!!)
     }
 
-    private fun mostrarNotificacion(monto: Double, total: Double) {
+    private fun escucharSistemaB() {
+        val db = FirebaseDatabase.getInstance().reference
+        sistemaBEscucha = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val ultimaConexion = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
+                prefs.edit().putString("ultima_conexion_b", ultimaConexion).apply()
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        }
+        db.child("monederoB/sistema").addValueEventListener(sistemaBEscucha!!)
+    }
+
+    private fun mostrarNotificacion(monedero: String, monto: Double, total: Double) {
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         val aviso = NotificationCompat.Builder(this, CANAL_NOTIFICACIONES)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
-            .setContentTitle("✅ Confirmación de Pago")
-            .setContentText("Monedero te envió S/ ${String.format("%.2f", monto)}")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("Monedero te envió S/ ${String.format("%.2f", monto)}\nTotal acumulado: S/ ${String.format("%.2f", total)}"))
+            .setContentTitle("✅ MONEDERO $monedero — Pago Recibido")
+            .setContentText("S/ ${String.format("%.2f", monto)}")
+            .setStyle(NotificationCompat.BigTextStyle().bigText("Monedero $monedero recibió S/ ${String.format("%.2f", monto)}\nTotal: S/ ${String.format("%.2f", total)}"))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
@@ -207,7 +249,7 @@ class MonederoServicio : Service() {
             .build()
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-            NotificationManagerCompat.from(this).notify(1001, aviso)
+            NotificationManagerCompat.from(this).notify(1001 + monedero.hashCode(), aviso)
         }
     }
 
@@ -215,53 +257,48 @@ class MonederoServicio : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        escuchando?.let {
-            FirebaseDatabase.getInstance().reference.child("historial").removeEventListener(it)
-        }
-        sensoresEscucha?.let {
-            FirebaseDatabase.getInstance().reference.child("sensores").removeEventListener(it)
-        }
-        estadoSistemaEscucha?.let {
-            FirebaseDatabase.getInstance().reference.child("sistema").removeEventListener(it)
-        }
+        escuchandoA?.let { FirebaseDatabase.getInstance().reference.child("historial").removeEventListener(it) }
+        escuchandoB?.let { FirebaseDatabase.getInstance().reference.child("monederoB/historial").removeEventListener(it) }
+        sensoresEscucha?.let { FirebaseDatabase.getInstance().reference.child("sensores").removeEventListener(it) }
+        sistemaAEscucha?.let { FirebaseDatabase.getInstance().reference.child("sistema").removeEventListener(it) }
+        sistemaBEscucha?.let { FirebaseDatabase.getInstance().reference.child("monederoB/sistema").removeEventListener(it) }
         tts?.stop()
         tts?.shutdown()
     }
 }
 
 class MainActivity : ComponentActivity() {
-    private val formatoFecha = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE"))
     private val formatoHoraFirebase = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale("es", "PE"))
     private var tts: TextToSpeech? = null
     private var vozLista = false
     private lateinit var prefs: SharedPreferences
-    private val TOTAL_GUARDADO = "total_acumulado"
+    private val TOTAL_A = "total_acumulado_a"
+    private val TOTAL_B = "total_acumulado_b"
     private val HISTORIAL_GUARDADO = "historial_guardado"
     private val permisoNotificaciones = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
-    private var totalGeneral by mutableStateOf(0.0)
-    private var historial by mutableStateOf(listOf<Movimiento>())
+    private var totalA by mutableStateOf(0.0)
+    private var totalB by mutableStateOf(0.0)
     private var voltaje by mutableStateOf(0.0)
     private var temperatura by mutableStateOf(0.0)
     private var rayosDistancia by mutableStateOf(999.0)
-    private var cerrojoAbierto by mutableStateOf(false)
     private var ultimaLecturaSensores by mutableStateOf("")
-    private var sistemaActivo by mutableStateOf(false)
-    private var ultimaConexionEsp32 by mutableStateOf("")
-    private var datosExistenEnFirebase by mutableStateOf(false)
+    private var sistemaAActivo by mutableStateOf(false)
+    private var sistemaBActivo by mutableStateOf(false)
+    private var ultimaConexionA by mutableStateOf("")
+    private var ultimaConexionB by mutableStateOf("")
+    private var historial by mutableStateOf(listOf<Movimiento>())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
         prefs = getSharedPreferences("MonederoPrefs", Context.MODE_PRIVATE)
-        totalGeneral = leerTotalGuardado()
+        totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()
+        totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()
         cargarHistorialGuardado()
         cargarSensoresGuardados()
-        cargarEstadoSistema()
         
-        try {
-            FirebaseApp.initializeApp(this)
-        } catch (e: Exception) { }
+        try { FirebaseApp.initializeApp(this) } catch (e: Exception) { }
         
         val db = FirebaseDatabase.getInstance().reference
         db.keepSynced(true)
@@ -282,9 +319,10 @@ class MainActivity : ComponentActivity() {
         
         setContent { PantallaPrincipal() }
         
-        // 🔄 CARGA INMEDIATA AL ABRIR LA APP
-        verificarDatosEnFirebase()
+        // 🔄 CARGA INMEDIATA AL ABRIR
+        verificarTodoFirebase()
         
+        // Escuchar Historial A
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (nivel1 in snapshot.children) {
@@ -294,117 +332,177 @@ class MainActivity : ComponentActivity() {
                         val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
                         val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
                         
-                        if (leido != true) continue
-                        if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
-                        if (monto <= 0.0) continue
+                        if (leido != true || codigo.length != 6 || monto <= 0.0) continue
+                        if (historial.any { it.codigo == codigo }) continue
                         
-                        val existeYa = historial.any { it.codigo == codigo }
-                        if (existeYa) continue
-                        
-                        val totalActual = leerTotalGuardado()
-                        val nuevoTicket = Movimiento(fecha, "Ticket generado", monto, totalActual, codigo, "")
-                        historial = listOf(nuevoTicket) + historial
-                        totalGeneral = totalActual
+                        historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalA, codigo, "")) + historial
                         guardarHistorial()
                     }
                 }
-                totalGeneral = leerTotalGuardado()
+                totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()
             }
             override fun onCancelled(e: DatabaseError) {}
         })
 
+        // Escuchar Historial B
+        db.child("monederoB/historial").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                for (nivel1 in snapshot.children) {
+                    for (nivel2 in nivel1.children) {
+                        val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
+                        val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
+                        val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
+                        val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+                        
+                        if (leido != true || codigo.length != 6 || monto <= 0.0) continue
+                        if (historial.any { it.codigo == codigo }) continue
+                        
+                        historial = listOf(Movimiento("B", fecha, "Ticket creado", monto, totalB, codigo, "")) + historial
+                        guardarHistorial()
+                    }
+                }
+                totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        })
+
+        // Escuchar Sensores
         db.child("sensores").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 voltaje = snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0
                 temperatura = snapshot.child("temperatura").getValue(Double::class.java) ?: 0.0
                 rayosDistancia = snapshot.child("rayos_km").getValue(Double::class.java) ?: 999.0
-                cerrojoAbierto = snapshot.child("cerrojo_abierto").getValue(Boolean::class.java) ?: false
                 ultimaLecturaSensores = SimpleDateFormat("dd/MM HH:mm", Locale("es", "PE")).format(Date())
-                verificarDatosEnFirebase()
+                verificarTodoFirebase()
             }
             override fun onCancelled(e: DatabaseError) {}
         })
 
+        // Escuchar Sistema A
         db.child("sistema").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                ultimaConexionEsp32 = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
-                verificarDatosEnFirebase()
+                ultimaConexionA = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
+                verificarEstadoSistemaA()
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        })
+
+        // Escuchar Sistema B
+        db.child("monederoB/sistema").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                ultimaConexionB = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
+                verificarEstadoSistemaB()
             }
             override fun onCancelled(e: DatabaseError) {}
         })
     }
 
-    // ✅ LÓGICA DEFINITIVA: Si hay datos → SISTEMA ON, si NO hay → OFF
-    private fun verificarDatosEnFirebase() {
+    // ✅ VERIFICAR MONEDERO A
+    private fun verificarEstadoSistemaA() {
+        if (ultimaConexionA.isEmpty()) {
+            sistemaAActivo = false
+            return
+        }
+        try {
+            val fecha = formatoHoraFirebase.parse(ultimaConexionA)
+            val difMin = TimeUnit.MILLISECONDS.toMinutes(Date().time - fecha.time)
+            sistemaAActivo = difMin < TIEMPO_ESPERA_CONEXION
+        } catch (e: Exception) { sistemaAActivo = true }
+    }
+
+    // ✅ VERIFICAR MONEDERO B
+    private fun verificarEstadoSistemaB() {
+        if (ultimaConexionB.isEmpty()) {
+            sistemaBActivo = false
+            return
+        }
+        try {
+            val fecha = formatoHoraFirebase.parse(ultimaConexionB)
+            val difMin = TimeUnit.MILLISECONDS.toMinutes(Date().time - fecha.time)
+            sistemaBActivo = difMin < TIEMPO_ESPERA_CONEXION
+        } catch (e: Exception) { sistemaBActivo = true }
+    }
+
+    private fun verificarTodoFirebase() {
         val db = FirebaseDatabase.getInstance().reference
         
-        db.child("sensores").get().addOnSuccessListener { sensoresSnap ->
-            val voltajeFB = sensoresSnap.child("voltaje").getValue(Double::class.java) ?: 0.0
-            val temperaturaFB = sensoresSnap.child("temperatura").getValue(Double::class.java) ?: 0.0
-            
-            db.child("sistema").get().addOnSuccessListener { sistemaSnap ->
-                val ultimaConexionFB = sistemaSnap.child("ultima_conexion").getValue(String::class.java) ?: ""
-                
-                // ✅ ¿HAY DATOS REALES EN FIREBASE?
-                val hayDatos = voltajeFB > 0.0 && temperaturaFB > -100 && ultimaConexionFB.isNotEmpty()
-                datosExistenEnFirebase = hayDatos
-                
-                if (hayDatos) {
-                    // ✅ HAY DATOS → VERIFICAR TIEMPO
-                    ultimaConexionEsp32 = ultimaConexionFB
-                    voltaje = voltajeFB
-                    temperatura = temperaturaFB
-                    rayosDistancia = sensoresSnap.child("rayos_km").getValue(Double::class.java) ?: 999.0
-                    ultimaLecturaSensores = SimpleDateFormat("dd/MM HH:mm", Locale("es", "PE")).format(Date())
-                    
-                    try {
-                        val fechaUltima = formatoHoraFirebase.parse(ultimaConexionFB)
-                        val ahora = Date()
-                        val diferenciaMs = ahora.time - fechaUltima.time
-                        val diferenciaMinutos = TimeUnit.MILLISECONDS.toMinutes(diferenciaMs)
-                        
-                        sistemaActivo = diferenciaMinutos < TIEMPO_ESPERA_CONEXION
-                    } catch (e: Exception) {
-                        sistemaActivo = true // Si hay datos pero falla la fecha → ON por precaución
-                    }
-                } else {
-                    // ❌ NO HAY DATOS → SISTEMA OFF COMPLETO
-                    sistemaActivo = false
-                    voltaje = 0.0
-                    temperatura = 0.0
-                    rayosDistancia = 999.0
-                    ultimaLecturaSensores = ""
-                }
-            }
+        db.child("sensores").get().addOnSuccessListener { snap ->
+            voltaje = snap.child("voltaje").getValue(Double::class.java) ?: 0.0
+            temperatura = snap.child("temperatura").getValue(Double::class.java) ?: 0.0
+            rayosDistancia = snap.child("rayos_km").getValue(Double::class.java) ?: 999.0
+            ultimaLecturaSensores = SimpleDateFormat("dd/MM HH:mm", Locale("es", "PE")).format(Date())
+        }
+        
+        db.child("sistema").get().addOnSuccessListener { snap ->
+            ultimaConexionA = snap.child("ultima_conexion").getValue(String::class.java) ?: ""
+            verificarEstadoSistemaA()
+        }
+        
+        db.child("monederoB/sistema").get().addOnSuccessListener { snap ->
+            ultimaConexionB = snap.child("ultima_conexion").getValue(String::class.java) ?: ""
+            verificarEstadoSistemaB()
         }
     }
 
-    private fun cargarEstadoSistema() {
-        ultimaConexionEsp32 = prefs.getString("ultima_conexion_esp32", "") ?: ""
-        verificarDatosEnFirebase()
+    private fun forzarActualizacionManual() {
+        verificarTodoFirebase()
+        Toast.makeText(this, "✅ Actualizado", Toast.LENGTH_SHORT).show()
     }
 
     private fun cargarSensoresGuardados() {
         voltaje = prefs.getFloat("ultimo_voltaje", 0f).toDouble()
         temperatura = prefs.getFloat("ultima_temperatura", 0f).toDouble()
         rayosDistancia = prefs.getFloat("rayos_distancia", 999f).toDouble()
-        cerrojoAbierto = prefs.getBoolean("cerrojo_abierto", false)
         ultimaLecturaSensores = prefs.getString("ultima_lectura_sensores", "") ?: ""
+        ultimaConexionA = prefs.getString("ultima_conexion_a", "") ?: ""
+        ultimaConexionB = prefs.getString("ultima_conexion_b", "") ?: ""
+        verificarEstadoSistemaA()
+        verificarEstadoSistemaB()
     }
 
-    private fun forzarActualizacionManual() {
-        verificarDatosEnFirebase()
-        Toast.makeText(this, "✅ Actualizado", Toast.LENGTH_SHORT).show()
+    private fun vaciarMonederoA() {
+        val campoClave = EditText(this)
+        campoClave.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        campoClave.filters = arrayOf(InputFilter.LengthFilter(6))
+        AlertDialog.Builder(this)
+            .setTitle("VACIAR MONEDERO A")
+            .setMessage("Escribe la clave para vaciar")
+            .setView(campoClave)
+            .setPositiveButton("CONFIRMAR") { _, _ ->
+                if(campoClave.text.toString() == CLAVE_VACIADO) {
+                    totalA = 0.0
+                    prefs.edit().putFloat(TOTAL_A, 0f).apply()
+                    Toast.makeText(this, "✅ Monedero A vaciado", Toast.LENGTH_SHORT).show()
+                } else Toast.makeText(this, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("CANCELAR", null)
+            .show()
     }
 
-    private fun leerTotalGuardado(): Double = prefs.getFloat(TOTAL_GUARDADO, 0f).toDouble()
-    private fun guardarTotal(total: Double) = prefs.edit().putFloat(TOTAL_GUARDADO, total.toFloat()).apply()
+    private fun vaciarMonederoB() {
+        val campoClave = EditText(this)
+        campoClave.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        campoClave.filters = arrayOf(InputFilter.LengthFilter(6))
+        AlertDialog.Builder(this)
+            .setTitle("VACIAR MONEDERO B")
+            .setMessage("Escribe la clave para vaciar")
+            .setView(campoClave)
+            .setPositiveButton("CONFIRMAR") { _, _ ->
+                if(campoClave.text.toString() == CLAVE_VACIADO) {
+                    totalB = 0.0
+                    prefs.edit().putFloat(TOTAL_B, 0f).apply()
+                    Toast.makeText(this, "✅ Monedero B vaciado", Toast.LENGTH_SHORT).show()
+                } else Toast.makeText(this, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("CANCELAR", null)
+            .show()
+    }
 
     private fun guardarHistorial() {
-        val historialTexto = historial.joinToString("|||") { mov ->
-            "${mov.fechaHora}§${mov.detalle}§${mov.montoIngresado}§${mov.totalAcumulado}§${mov.codigo}§${mov.alias}"
+        val texto = historial.joinToString("|||") {
+            "${it.monedero}§${it.fechaHora}§${it.detalle}§${it.montoIngresado}§${it.totalAcumulado}§${it.codigo}§${it.alias}"
         }
-        prefs.edit().putString(HISTORIAL_GUARDADO, historialTexto).apply()
+        prefs.edit().putString(HISTORIAL_GUARDADO, texto).apply()
     }
 
     private fun cargarHistorialGuardado() {
@@ -412,22 +510,32 @@ class MainActivity : ComponentActivity() {
         if (texto.isNotEmpty()) {
             historial = texto.split("|||").mapNotNull { linea ->
                 val campos = linea.split("§")
-                if (campos.size >= 5) {
-                    Movimiento(
-                        campos[0], campos[1],
-                        campos[2].toDoubleOrNull() ?: 0.0,
-                        campos[3].toDoubleOrNull() ?: 0.0,
-                        campos[4], if (campos.size >= 6) campos[5] else ""
-                    )
-                } else null
+                if (campos.size >= 6) Movimiento(
+                    campos[0], campos[1], campos[2],
+                    campos[3].toDoubleOrNull() ?: 0.0,
+                    campos[4].toDoubleOrNull() ?: 0.0,
+                    campos[5], if (campos.size >= 7) campos[6] else ""
+                ) else null
             }
         }
+    }
+
+    private fun limpiarHistorial() {
+        AlertDialog.Builder(this)
+            .setTitle("LIMPIAR HISTORIAL")
+            .setMessage("¿Borrar todo el historial?\n⚠️ No afecta los totales.")
+            .setPositiveButton("SÍ") { _, _ ->
+                historial = emptyList()
+                prefs.edit().remove(HISTORIAL_GUARDADO).apply()
+                Toast.makeText(this, "✅ Historial limpiado", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("CANCELAR", null)
+            .show()
     }
 
     private fun crearCanalNotificaciones() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val canal = NotificationChannel(CANAL_NOTIFICACIONES, "Monedero Paoyhan", NotificationManager.IMPORTANCE_HIGH)
-            canal.description = "Confirmaciones de pago"
             canal.enableVibration(true)
             getSystemService(NotificationManager::class.java).createNotificationChannel(canal)
         }
@@ -441,95 +549,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun alternarCerrojo() {
-        val db = FirebaseDatabase.getInstance().reference
-        val nuevoEstado = !cerrojoAbierto
-        db.child("sensores/cerrojo_abierto").setValue(nuevoEstado)
-        cerrojoAbierto = nuevoEstado
-        Toast.makeText(this, if(nuevoEstado) "🔓 CERROJO ABIERTO" else "🔒 CERROJO CERRADO", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun ponerAlias(posicion: Int) {
-        val campoAlias = EditText(this)
-        AlertDialog.Builder(this)
-            .setTitle("PONER ALIAS")
-            .setView(campoAlias)
-            .setPositiveButton("GUARDAR") { _, _ ->
-                val nombre = campoAlias.text.toString().trim()
-                if(nombre.isNotEmpty()) {
-                    historial = historial.toMutableList().also { it[posicion] = it[posicion].copy(alias = nombre) }
-                    guardarHistorial()
-                }
-            }
-            .show()
-    }
-
-    private fun pedirClaveVaciado() {
-        val campoClave = EditText(this)
-        campoClave.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
-        campoClave.filters = arrayOf(InputFilter.LengthFilter(6))
-
-        val contenedor = LinearLayout(this)
-        contenedor.orientation = LinearLayout.HORIZONTAL
-        contenedor.setPadding(48, 16, 48, 16)
-        contenedor.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        campoClave.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-        val botonOjo = ImageButton(this)
-        botonOjo.setImageResource(android.R.drawable.ic_menu_view)
-        botonOjo.setBackgroundColor(android.graphics.Color.TRANSPARENT)
-        botonOjo.setPadding(32, 0, 0, 0)
-
-        var visible = false
-        botonOjo.setOnClickListener {
-            visible = !visible
-            if (visible) {
-                campoClave.inputType = InputType.TYPE_CLASS_NUMBER
-                botonOjo.setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-            } else {
-                campoClave.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
-                botonOjo.setImageResource(android.R.drawable.ic_menu_view)
-            }
-        }
-        contenedor.addView(campoClave)
-        contenedor.addView(botonOjo)
-
-        AlertDialog.Builder(this)
-            .setTitle("CLAVE DE SEGURIDAD")
-            .setMessage("Escribe los 6 dígitos para vaciar el monedero")
-            .setView(contenedor)
-            .setPositiveButton("CONFIRMAR") { _, _ ->
-                if(campoClave.text.toString() == CLAVE_VACIADO) {
-                    totalGeneral = 0.0
-                    guardarTotal(0.0)
-                    Toast.makeText(this@MainActivity, "✅ Monedero vaciado", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(this@MainActivity, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setNegativeButton("CANCELAR", null)
-            .show()
-    }
-
-    private fun limpiarHistorial() {
-        AlertDialog.Builder(this)
-            .setTitle("LIMPIAR HISTORIAL")
-            .setMessage("¿Borrar todo el historial de la aplicación?\n\n⚠️ No afecta el total ni Firebase.")
-            .setPositiveButton("SÍ, LIMPIAR") { _, _ ->
-                historial = emptyList()
-                prefs.edit().remove(HISTORIAL_GUARDADO).apply()
-                Toast.makeText(this@MainActivity, "✅ Historial limpiado", Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton("CANCELAR", null)
-            .show()
-    }
-
-    private fun formatearMonto(monto: Double): String = when {
+    private fun formatearMonto(monto: Double) = when {
         monto == 0.10 -> "+0.10"
         monto == 0.20 -> "+0.20"
         monto == 0.50 -> "+0.50"
-        monto == 1.00 -> "+1.00"
-        monto == 2.00 -> "+2.00"
-        monto == 5.00 -> "+5.00"
         monto < 1.00 -> String.format("+%.2f", monto)
         else -> String.format("+%.0f", monto)
     }
@@ -538,8 +561,9 @@ class MainActivity : ComponentActivity() {
     fun PantallaPrincipal() {
         LaunchedEffect(Unit) {
             while (true) {
-                verificarDatosEnFirebase()
-                delay(30000) // 30 segundos
+                verificarEstadoSistemaA()
+                verificarEstadoSistemaB()
+                delay(30000)
             }
         }
 
@@ -551,58 +575,36 @@ class MainActivity : ComponentActivity() {
                     .padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // 🔄 TÍTULO + BOTÓN ACTUALIZAR
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("MONEDERO PAOYHAN", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        val colorSistema = if (sistemaActivo) Color(0xFF4CAF50) else Color(0xFFFF5252)
-                        val textoSistema = if (sistemaActivo) "SISTEMA ON" else "SISTEMA OFF"
-                        Box(
-                            modifier = Modifier
-                                .background(colorSistema, RoundedCornerShape(6.dp))
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(textoSistema, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                        }
-                        
-                        IconButton(onClick = { forzarActualizacionManual() }) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Actualizar")
-                        }
+                    IconButton(onClick = { forzarActualizacionManual() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Actualizar", tint = Color(0xFF1976D2))
                     }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                // ⚡🌡️⚠️ SENSORES COMPARTIDOS
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFEB3B))) {
                         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text("⚡ VOLTAJE", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text(
-                                if (voltaje > 0) String.format("%.1f V", voltaje) 
-                                else "—", 
-                                fontSize = 18.sp, 
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text(if (voltaje > 0) String.format("%.1f V", voltaje) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFCC80))) {
                         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text("🌡️ TEMPERATURA", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text(
-                                if (temperatura > -100) String.format("%.1f °C", temperatura) 
-                                else "—", 
-                                fontSize = 18.sp, 
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text(if (temperatura > -100) String.format("%.1f °C", temperatura) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    
                     val colorRayos = when {
                         rayosDistancia < DISTANCIA_PELIGRO -> Color(0xFFFF5252)
                         rayosDistancia <= 40.0 -> Color(0xFFFFC107)
@@ -621,67 +623,94 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                if (datosExistenEnFirebase && ultimaLecturaSensores.isNotEmpty()) {
+                if (ultimaLecturaSensores.isNotEmpty()) {
                     Text("Última lectura: $ultimaLecturaSensores", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
-                } else {
-                    Text("Última lectura: Sin conexión", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(Color(0xFFCDFF33))) {
-                    Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("TOTAL ACUMULADO", fontSize = 14.sp)
-                        Text(String.format("%.2f SOLES", totalGeneral), fontSize = 36.sp, fontWeight = FontWeight.Bold)
+                // 🟡 MONEDERO A + 🔵 MONEDERO B
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // 🟡 MONEDERO A
+                    Column(modifier = Modifier.weight(1f)) {
+                        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(Color(0xFFFFEB3B))) {
+                            Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("MONEDERO A", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                Text("TOTAL ACUMULADO", fontSize = 12.sp)
+                                Text(String.format("%.2f SOLES", totalA), fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(onClick = { vaciarMonederoA() }, colors = ButtonDefaults.buttonColors(Color(0xFFD32F2F)), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            Text("VACIAR", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        val colorSistemaA = if (sistemaAActivo) Color(0xFF4CAF50) else Color(0xFFFF5252)
+                        val textoSistemaA = if (sistemaAActivo) "SISTEMA ON" else "SISTEMA OFF"
+                        Box(modifier = Modifier.fillMaxWidth().background(colorSistemaA, RoundedCornerShape(8.dp)).padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                            Text(textoSistemaA, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+
+                    // 🔵 MONEDERO B
+                    Column(modifier = Modifier.weight(1f)) {
+                        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(Color(0xFFB3E5FC))) {
+                            Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("MONEDERO B", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                Text("TOTAL ACUMULADO", fontSize = 12.sp)
+                                Text(String.format("%.2f SOLES", totalB), fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(onClick = { vaciarMonederoB() }, colors = ButtonDefaults.buttonColors(Color(0xFFD32F2F)), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            Text("VACIAR", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        val colorSistemaB = if (sistemaBActivo) Color(0xFF4CAF50) else Color(0xFFFF5252)
+                        val textoSistemaB = if (sistemaBActivo) "SISTEMA ON" else "SISTEMA OFF"
+                        Box(modifier = Modifier.fillMaxWidth().background(colorSistemaB, RoundedCornerShape(8.dp)).padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                            Text(textoSistemaB, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Button(onClick = { pedirClaveVaciado() }, colors = ButtonDefaults.buttonColors(MaterialTheme.colorScheme.error), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1f)) {
-                        Text("VACIAR", fontSize = 12.sp)
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    
-                    val colorBotonCerrojo = if (cerrojoAbierto) Color(0xFFFF5252) else Color(0xFF4CAF50)
-                    val textoCerrojo = if (cerrojoAbierto) "🔓 ABIERTO" else "🔒 CERRADO"
-                    Button(onClick = { alternarCerrojo() }, colors = ButtonDefaults.buttonColors(colorBotonCerrojo), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1.2f)) {
-                        Text(textoCerrojo, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
-                    
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Button(onClick = { limpiarHistorial() }, colors = ButtonDefaults.buttonColors(Color(0xFF1976D2)), shape = RoundedCornerShape(10.dp), modifier = Modifier.weight(1f)) {
-                        Text("LIMPIAR", fontSize = 12.sp)
+                // 📋 HISTORIAL + BOTÓN LIMPIAR
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Historial", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Button(onClick = { limpiarHistorial() }, colors = ButtonDefaults.buttonColors(Color(0xFF1976D2)), shape = RoundedCornerShape(8.dp)) {
+                        Text("LIMPIAR", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("Historial", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Column(modifier = Modifier.fillMaxWidth().weight(1f).background(Color(0xFFE0F7FF), RoundedCornerShape(12.dp)).padding(8.dp)) {
                     LazyColumn(modifier = Modifier.fillMaxWidth()) {
                         items(historial.size) { posicion ->
                             val mov = historial[posicion]
-                            val textoAlias = if(mov.alias.isNotEmpty()) mov.alias else "DESCONOCIDO"
-                            val colorAlias = if(mov.alias.isNotEmpty()) Color(0xFF1976D2) else Color(0xFFFF9800)
+                            val colorMonedero = if (mov.monedero == "A") Color(0xFFF57F17) else Color(0xFF0277BD)
                             val textoMonto = formatearMonto(mov.montoIngresado)
 
                             Card(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), shape = RoundedCornerShape(8.dp)) {
                                 Row(modifier = Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                                        Card(modifier = Modifier.size(45.dp), shape = RoundedCornerShape(6.dp)) { Box(contentAlignment = Alignment.Center) { Text("📷", fontSize = 18.sp) } }
+                                        Card(modifier = Modifier.size(45.dp), shape = RoundedCornerShape(6.dp)) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Text(if (mov.monedero == "A") "🟡" else "🔵", fontSize = 20.sp)
+                                            }
+                                        }
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column {
-                                            Text(textoAlias, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = colorAlias, modifier = Modifier.clickable { ponerAlias(posicion) })
+                                            Text("MONEDERO ${mov.monedero}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = colorMonedero)
                                             Text(mov.fechaHora, fontSize = 11.sp, color = Color.Gray)
-                                            if(mov.codigo.isNotEmpty()) Text("Ticket creado", fontSize = 12.sp, color = Color(0xFF4CAF50))
+                                            Text("Ticket creado", fontSize = 12.sp, color = Color(0xFF4CAF50))
                                         }
                                     }
                                     Column(horizontalAlignment = Alignment.End) {
-                                        if(mov.codigo.isNotEmpty()) Text("CÓDIGO: ${mov.codigo}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
-                                        if(mov.montoIngresado > 0) Text(textoMonto, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                                        Text("CÓDIGO: ${mov.codigo}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1976D2))
+                                        Text(textoMonto, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
                                     }
                                 }
                             }
