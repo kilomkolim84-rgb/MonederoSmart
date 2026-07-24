@@ -393,6 +393,7 @@ class MainActivity : ComponentActivity() {
         })
     }
 
+    // ✅ SISTEMA ON/OFF DEPENDE SOLO DE ultima_conexion — NO de los sensores
     private fun verificarEstadoSistemaA() {
         if (ultimaConexionA.isEmpty()) {
             sistemaAActivo = false
@@ -613,6 +614,7 @@ class MainActivity : ComponentActivity() {
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFEB3B))) {
                         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text("⚡ VOLTAJE", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            // ✅ Si el sistema está encendido Y hay valor → mostrar, si no → rayitas
                             Text(if (sistemaAActivo && voltaje > 0) String.format("%.1f V", voltaje) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -620,6 +622,7 @@ class MainActivity : ComponentActivity() {
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFCC80))) {
                         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text("🌡️ TEMPERATURA", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            // ✅ Si el sistema está encendido Y hay valor → mostrar, si no → rayitas
                             Text(if (sistemaAActivo && temperatura > -100) String.format("%.1f °C", temperatura) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -644,6 +647,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                // ✅ Solo mostrar "Última lectura" si el sistema está encendido Y hay datos de sensores
                 if (sistemaAActivo && ultimaLecturaSensores.isNotEmpty()) {
                     Text("Última lectura: $ultimaLecturaSensores", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
                 }
