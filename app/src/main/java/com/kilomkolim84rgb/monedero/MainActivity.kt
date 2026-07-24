@@ -19,7 +19,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -57,7 +56,7 @@ const val CANAL_SERVICIO = "canal_servicio"
 const val ID_NOTIFICACION_SERVICIO = 12345
 const val DISTANCIA_PELIGRO = 8.0
 const val DISTANCIA_SEGURIDAD = 9.0
-// ✅ YA NO HAY TIEMPO DE ESPERA — SOLO MIRA SI EXISTE EL DATO
+const val TIEMPO_LIMITE_MINUTOS = 3  // ✅ SI PASA DE 3 MINUTOS SIN SEÑAL → OFF
 
 data class Movimiento(
     val monedero: String = "A",
@@ -196,13 +195,14 @@ class MonederoServicio : Service() {
                 val voltaje = snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0
                 val temperatura = snapshot.child("temperatura").getValue(Double::class.java) ?: 0.0
                 val rayosDistancia = snapshot.child("rayos_km").getValue(Double::class.java) ?: 999.0
-                val fechaHora = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "PE")).format(Date())
                 
                 prefs.edit()
                     .putFloat("ultimo_voltaje", voltaje.toFloat())
                     .putFloat("ultima_temperatura", temperatura.toFloat())
                     .putFloat("rayos_distancia", rayosDistancia.toFloat())
-                    .putString("ultima_lectura_sensores", fechaHora)
+                    .putBoolean("tiene_voltaje", snapshot.hasChild("voltaje"))
+                    .putBoolean("tiene_temperatura", snapshot.hasChild("temperatura"))
+                    .putBoolean("tiene_rayos", snapshot.hasChild("rayos_km"))
                     .apply()
             }
             override fun onCancelled(e: DatabaseError) {}
@@ -215,7 +215,11 @@ class MonederoServicio : Service() {
         sistemaAEscucha = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val estado = snapshot.child("estado").getValue(String::class.java) ?: ""
-                prefs.edit().putString("estado_a", estado).apply()
+                val ultimaConexion = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
+                prefs.edit()
+                    .putString("estado_a", estado)
+                    .putString("ultima_conexion_a", ultimaConexion)
+                    .apply()
             }
             override fun onCancelled(e: DatabaseError) {}
         }
@@ -282,11 +286,10 @@ class MainActivity : ComponentActivity() {
     private var voltaje by mutableStateOf(0.0)
     private var temperatura by mutableStateOf(0.0)
     private var rayosDistancia by mutableStateOf(999.0)
-    private var ultimaLecturaSensores by mutableStateOf("")
     private var sistemaAActivo by mutableStateOf(false)
     private var sistemaBActivo by mutableStateOf(false)
     private var estadoSistemaA by mutableStateOf("")
-    private var estadoSistemaB by mutableStateOf("")
+    private var ultimaConexionA by mutableStateOf("")
     private var tieneVoltaje by mutableStateOf(false)
     private var tieneTemperatura by mutableStateOf(false)
     private var tieneRayos by mutableStateOf(false)
@@ -299,7 +302,7 @@ class MainActivity : ComponentActivity() {
         totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()
         totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()
         cargarHistorialGuardado()
-        cargarSensoresGuardados()
+        cargarDatosGuardados()
         
         try { FirebaseApp.initializeApp(this) } catch (e: Exception) { }
         
@@ -364,7 +367,6 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(e: DatabaseError) {}
         })
 
-        // ✅ SOLO MIRA SI EXISTEN LOS DATOS — SIN HORA, SIN TIEMPO
         db.child("sensores").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 tieneVoltaje = snapshot.hasChild("voltaje")
@@ -373,41 +375,61 @@ class MainActivity : ComponentActivity() {
                 voltaje = snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0
                 temperatura = snapshot.child("temperatura").getValue(Double::class.java) ?: 0.0
                 rayosDistancia = snapshot.child("rayos_km").getValue(Double::class.java) ?: 999.0
-                ultimaLecturaSensores = SimpleDateFormat("dd/MM HH:mm", Locale("es", "PE")).format(Date())
             }
             override fun onCancelled(e: DatabaseError) {}
         })
 
-        // ✅ SOLO MIRA SI estado = "ON" — SIN CONTAR MINUTOS
         db.child("sistema").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 estadoSistemaA = snapshot.child("estado").getValue(String::class.java) ?: ""
-                sistemaAActivo = estadoSistemaA == "ON"
+                ultimaConexionA = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
+                actualizarEstadoSistema()
             }
             override fun onCancelled(e: DatabaseError) {}
         })
 
         db.child("monederoB/sistema").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                estadoSistemaB = snapshot.child("estado").getValue(String::class.java) ?: ""
-                sistemaBActivo = estadoSistemaB == "ON"
+                val estado = snapshot.child("estado").getValue(String::class.java) ?: ""
+                sistemaBActivo = estado == "ON"
             }
             override fun onCancelled(e: DatabaseError) {}
         })
     }
 
-    private fun cargarSensoresGuardados() {
+    // ✅ LÓGICA PRINCIPAL: SI PASA DE 3 MINUTOS → OFF
+    private fun actualizarEstadoSistema() {
+        sistemaAActivo = if (estadoSistemaA != "ON") {
+            false
+        } else {
+            val formato = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale("es", "PE"))
+            val horaUltima = try { formato.parse(ultimaConexionA) } catch(e: Exception) { null }
+            
+            if (horaUltima == null) {
+                false
+            } else {
+                val minutos = (Date().time - horaUltima.time) / (1000 * 60)
+                minutos <= TIEMPO_LIMITE_MINUTOS
+            }
+        }
+    }
+
+    private fun cargarDatosGuardados() {
         tieneVoltaje = prefs.getBoolean("tiene_voltaje", false)
         tieneTemperatura = prefs.getBoolean("tiene_temperatura", false)
         tieneRayos = prefs.getBoolean("tiene_rayos", false)
         voltaje = prefs.getFloat("ultimo_voltaje", 0f).toDouble()
         temperatura = prefs.getFloat("ultima_temperatura", 0f).toDouble()
         rayosDistancia = prefs.getFloat("rayos_distancia", 999f).toDouble()
-        ultimaLecturaSensores = prefs.getString("ultima_lectura_sensores", "") ?: ""
         estadoSistemaA = prefs.getString("estado_a", "") ?: ""
-        estadoSistemaB = prefs.getString("estado_b", "") ?: ""
-        sistemaAActivo = estadoSistemaA == "ON"
-        sistemaBActivo = estadoSistemaB == "ON"
+        ultimaConexionA = prefs.getString("ultima_conexion_a", "") ?: ""
+        actualizarEstadoSistema()
+    }
+
+    private fun actualizarManual() {
+        cargarDatosGuardados()
+        actualizarEstadoSistema()
+        Toast.makeText(this, "✅ Actualizado", Toast.LENGTH_SHORT).show()
     }
 
     private fun pedirClaveVaciado(monedero: String, claveCorrecta: String, onConfirmar: () -> Unit) {
@@ -536,6 +558,13 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun PantallaPrincipal() {
+        LaunchedEffect(ultimaConexionA) {
+            while (true) {
+                actualizarEstadoSistema()
+                delay(30000) // Revisa cada 30 segundos
+            }
+        }
+
         Scaffold(modifier = Modifier.fillMaxSize(), containerColor = Color.White) { padding ->
             Column(
                 modifier = Modifier
@@ -550,7 +579,7 @@ class MainActivity : ComponentActivity() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("MONEDERO PAOYHAN", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    IconButton(onClick = { }) {
+                    IconButton(onClick = { actualizarManual() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Actualizar", tint = Color(0xFF1976D2))
                     }
                 }
@@ -561,7 +590,6 @@ class MainActivity : ComponentActivity() {
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFEB3B))) {
                         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text("⚡ VOLTAJE", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            // ✅ SI EXISTE EN FIREBASE → MOSTRAR, SI NO → RAYITAS
                             Text(if (tieneVoltaje && sistemaAActivo) String.format("%.1f V", voltaje) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -569,7 +597,6 @@ class MainActivity : ComponentActivity() {
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFCC80))) {
                         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text("🌡️ TEMPERATURA", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            // ✅ SI EXISTE EN FIREBASE → MOSTRAR, SI NO → RAYITAS
                             Text(if (tieneTemperatura && sistemaAActivo) String.format("%.1f °C", temperatura) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -611,7 +638,6 @@ class MainActivity : ComponentActivity() {
                             Text("VACIAR", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                         Spacer(modifier = Modifier.height(8.dp))
-                        // ✅ SI Firebase dice "ON" → VERDE, SI NO → ROJO
                         val colorSistemaA = if (sistemaAActivo) Color(0xFF4CAF50) else Color(0xFFFF5252)
                         val textoSistemaA = if (sistemaAActivo) "SISTEMA ON" else "SISTEMA OFF"
                         Box(modifier = Modifier.fillMaxWidth().background(colorSistemaA, RoundedCornerShape(8.dp)).padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
