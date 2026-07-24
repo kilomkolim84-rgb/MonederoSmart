@@ -55,7 +55,7 @@ const val CANAL_SERVICIO = "canal_servicio"
 const val ID_NOTIFICACION_SERVICIO = 12345
 const val DISTANCIA_PELIGRO = 8.0
 const val DISTANCIA_SEGURIDAD = 9.0
-const val TIEMPO_LIMITE_MINUTOS = 3
+const val TIEMPO_LIMITE_SEGUNDOS = 62  // ✅ 1 MINUTO CON 2 SEGUNDOS
 
 data class Movimiento(
     val monedero: String = "A",
@@ -388,7 +388,7 @@ class MainActivity : ComponentActivity() {
         })
     }
 
-    // ✅ LÓGICA DEFINITIVA: SI PASA DE 3 MINUTOS → OFF
+    // ✅ LÓGICA CORREGIDA: SI PASA DE 62 SEGUNDOS → OFF
     private fun actualizarEstadoSistema() {
         sistemaAActivo = if (estadoSistemaA != "ON" || ultimaConexionA.isBlank()) {
             false
@@ -399,8 +399,8 @@ class MainActivity : ComponentActivity() {
             if (horaUltima == null) {
                 false
             } else {
-                val minutos = (Date().time - horaUltima.time) / (1000 * 60)
-                minutos <= TIEMPO_LIMITE_MINUTOS
+                val segundos = (Date().time - horaUltima.time) / 1000
+                segundos <= TIEMPO_LIMITE_SEGUNDOS  // ✅ 62 SEGUNDOS = 1min 2seg
             }
         }
     }
