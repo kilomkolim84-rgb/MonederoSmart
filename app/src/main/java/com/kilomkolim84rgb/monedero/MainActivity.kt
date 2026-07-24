@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
@@ -50,7 +51,8 @@ import java.util.*
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.delay
 
-const val CLAVE_VACIADO = "222777"
+const val CLAVE_VACIADO_A = "222777"  // ✅ 3 veces 2 + 3 veces 7
+const val CLAVE_VACIADO_B = "333888"  // ✅ Clave propia del Monedero B
 const val CANAL_NOTIFICACIONES = "canal_monedero"
 const val CANAL_SERVICIO = "canal_servicio"
 const val ID_NOTIFICACION_SERVICIO = 12345
@@ -59,7 +61,7 @@ const val DISTANCIA_SEGURIDAD = 9.0
 const val TIEMPO_ESPERA_CONEXION = 15L
 
 data class Movimiento(
-    val monedero: String = "A", // A o B
+    val monedero: String = "A",
     val fechaHora: String = "",
     val detalle: String = "",
     val montoIngresado: Double = 0.0,
@@ -319,10 +321,8 @@ class MainActivity : ComponentActivity() {
         
         setContent { PantallaPrincipal() }
         
-        // 🔄 CARGA INMEDIATA AL ABRIR
         verificarTodoFirebase()
         
-        // Escuchar Historial A
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (nivel1 in snapshot.children) {
@@ -344,7 +344,6 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(e: DatabaseError) {}
         })
 
-        // Escuchar Historial B
         db.child("monederoB/historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (nivel1 in snapshot.children) {
@@ -366,7 +365,6 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(e: DatabaseError) {}
         })
 
-        // Escuchar Sensores
         db.child("sensores").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 voltaje = snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0
@@ -378,7 +376,6 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(e: DatabaseError) {}
         })
 
-        // Escuchar Sistema A
         db.child("sistema").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 ultimaConexionA = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
@@ -387,7 +384,6 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(e: DatabaseError) {}
         })
 
-        // Escuchar Sistema B
         db.child("monederoB/sistema").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 ultimaConexionB = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
@@ -397,7 +393,6 @@ class MainActivity : ComponentActivity() {
         })
     }
 
-    // ✅ VERIFICAR MONEDERO A
     private fun verificarEstadoSistemaA() {
         if (ultimaConexionA.isEmpty()) {
             sistemaAActivo = false
@@ -410,7 +405,6 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) { sistemaAActivo = true }
     }
 
-    // ✅ VERIFICAR MONEDERO B
     private fun verificarEstadoSistemaB() {
         if (ultimaConexionB.isEmpty()) {
             sistemaBActivo = false
@@ -460,42 +454,71 @@ class MainActivity : ComponentActivity() {
         verificarEstadoSistemaB()
     }
 
-    private fun vaciarMonederoA() {
+    // 👁️ FUNCIÓN CON OJILLO PARA AMBOS MONEDEROS
+    private fun pedirClaveVaciado(monedero: String, claveCorrecta: String, onConfirmar: () -> Unit) {
         val campoClave = EditText(this)
         campoClave.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
-        campoClave.filters = arrayOf(InputFilter.LengthFilter(6))
+        campoClave.filters = arrayOf(InputFilter.LengthFilter(6)) // ✅ 6 dígitos exactos
+
+        val contenedor = LinearLayout(this)
+        contenedor.orientation = LinearLayout.HORIZONTAL
+        contenedor.setPadding(48, 16, 48, 16)
+        contenedor.layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        campoClave.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+
+        // 👁️ BOTÓN OJILLO PARA VER/OCULTAR
+        val botonOjo = ImageButton(this)
+        botonOjo.setImageResource(android.R.drawable.ic_menu_view)
+        botonOjo.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        botonOjo.setPadding(32, 0, 0, 0)
+
+        var visible = false
+        botonOjo.setOnClickListener {
+            visible = !visible
+            if (visible) {
+                campoClave.inputType = InputType.TYPE_CLASS_NUMBER
+                botonOjo.setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+            } else {
+                campoClave.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+                botonOjo.setImageResource(android.R.drawable.ic_menu_view)
+            }
+        }
+
+        contenedor.addView(campoClave)
+        contenedor.addView(botonOjo)
+
         AlertDialog.Builder(this)
-            .setTitle("VACIAR MONEDERO A")
-            .setMessage("Escribe la clave para vaciar")
-            .setView(campoClave)
+            .setTitle("VACIAR MONEDERO $monedero")
+            .setMessage("Escribe los 6 dígitos para vaciar")
+            .setView(contenedor)
             .setPositiveButton("CONFIRMAR") { _, _ ->
-                if(campoClave.text.toString() == CLAVE_VACIADO) {
-                    totalA = 0.0
-                    prefs.edit().putFloat(TOTAL_A, 0f).apply()
-                    Toast.makeText(this, "✅ Monedero A vaciado", Toast.LENGTH_SHORT).show()
-                } else Toast.makeText(this, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
+                if (campoClave.text.toString() == claveCorrecta) {
+                    onConfirmar()
+                } else {
+                    Toast.makeText(this, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
+                }
             }
             .setNegativeButton("CANCELAR", null)
             .show()
     }
 
+    private fun vaciarMonederoA() {
+        pedirClaveVaciado("A", CLAVE_VACIADO_A) {
+            totalA = 0.0
+            prefs.edit().putFloat(TOTAL_A, 0f).apply()
+            Toast.makeText(this, "✅ Monedero A vaciado", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun vaciarMonederoB() {
-        val campoClave = EditText(this)
-        campoClave.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
-        campoClave.filters = arrayOf(InputFilter.LengthFilter(6))
-        AlertDialog.Builder(this)
-            .setTitle("VACIAR MONEDERO B")
-            .setMessage("Escribe la clave para vaciar")
-            .setView(campoClave)
-            .setPositiveButton("CONFIRMAR") { _, _ ->
-                if(campoClave.text.toString() == CLAVE_VACIADO) {
-                    totalB = 0.0
-                    prefs.edit().putFloat(TOTAL_B, 0f).apply()
-                    Toast.makeText(this, "✅ Monedero B vaciado", Toast.LENGTH_SHORT).show()
-                } else Toast.makeText(this, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton("CANCELAR", null)
-            .show()
+        pedirClaveVaciado("B", CLAVE_VACIADO_B) {
+            totalB = 0.0
+            prefs.edit().putFloat(TOTAL_B, 0f).apply()
+            Toast.makeText(this, "✅ Monedero B vaciado", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun guardarHistorial() {
@@ -575,7 +598,6 @@ class MainActivity : ComponentActivity() {
                     .padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // 🔄 TÍTULO + BOTÓN ACTUALIZAR
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -589,7 +611,6 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // ⚡🌡️⚠️ SENSORES COMPARTIDOS
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFEB3B))) {
                         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -629,9 +650,7 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 🟡 MONEDERO A + 🔵 MONEDERO B
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // 🟡 MONEDERO A
                     Column(modifier = Modifier.weight(1f)) {
                         Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(Color(0xFFFFEB3B))) {
                             Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -652,7 +671,6 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // 🔵 MONEDERO B
                     Column(modifier = Modifier.weight(1f)) {
                         Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(Color(0xFFB3E5FC))) {
                             Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -676,7 +694,6 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 📋 HISTORIAL + BOTÓN LIMPIAR
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("Historial", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Button(onClick = { limpiarHistorial() }, colors = ButtonDefaults.buttonColors(Color(0xFF1976D2)), shape = RoundedCornerShape(8.dp)) {
