@@ -48,7 +48,6 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
-import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.delay
 
 const val CLAVE_VACIADO_A = "222777"
@@ -58,7 +57,7 @@ const val CANAL_SERVICIO = "canal_servicio"
 const val ID_NOTIFICACION_SERVICIO = 12345
 const val DISTANCIA_PELIGRO = 8.0
 const val DISTANCIA_SEGURIDAD = 9.0
-const val TIEMPO_ESPERA_CONEXION = 2L  // ✅ 2 minutos exactos
+// ✅ YA NO HAY TIEMPO DE ESPERA — SOLO MIRA SI EXISTE EL DATO
 
 data class Movimiento(
     val monedero: String = "A",
@@ -215,8 +214,8 @@ class MonederoServicio : Service() {
         val db = FirebaseDatabase.getInstance().reference
         sistemaAEscucha = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val ultimaConexion = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
-                prefs.edit().putString("ultima_conexion_a", ultimaConexion).apply()
+                val estado = snapshot.child("estado").getValue(String::class.java) ?: ""
+                prefs.edit().putString("estado_a", estado).apply()
             }
             override fun onCancelled(e: DatabaseError) {}
         }
@@ -227,8 +226,8 @@ class MonederoServicio : Service() {
         val db = FirebaseDatabase.getInstance().reference
         sistemaBEscucha = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val ultimaConexion = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
-                prefs.edit().putString("ultima_conexion_b", ultimaConexion).apply()
+                val estado = snapshot.child("estado").getValue(String::class.java) ?: ""
+                prefs.edit().putString("estado_b", estado).apply()
             }
             override fun onCancelled(e: DatabaseError) {}
         }
@@ -270,7 +269,6 @@ class MonederoServicio : Service() {
 }
 
 class MainActivity : ComponentActivity() {
-    private val formatoHoraFirebase = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale("es", "PE"))
     private var tts: TextToSpeech? = null
     private var vozLista = false
     private lateinit var prefs: SharedPreferences
@@ -287,8 +285,11 @@ class MainActivity : ComponentActivity() {
     private var ultimaLecturaSensores by mutableStateOf("")
     private var sistemaAActivo by mutableStateOf(false)
     private var sistemaBActivo by mutableStateOf(false)
-    private var ultimaConexionA by mutableStateOf("")
-    private var ultimaConexionB by mutableStateOf("")
+    private var estadoSistemaA by mutableStateOf("")
+    private var estadoSistemaB by mutableStateOf("")
+    private var tieneVoltaje by mutableStateOf(false)
+    private var tieneTemperatura by mutableStateOf(false)
+    private var tieneRayos by mutableStateOf(false)
     private var historial by mutableStateOf(listOf<Movimiento>())
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -320,8 +321,6 @@ class MainActivity : ComponentActivity() {
         pedirPermisoNotificaciones()
         
         setContent { PantallaPrincipal() }
-        
-        verificarTodoFirebase()
         
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -365,94 +364,50 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(e: DatabaseError) {}
         })
 
+        // ✅ SOLO MIRA SI EXISTEN LOS DATOS — SIN HORA, SIN TIEMPO
         db.child("sensores").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
+                tieneVoltaje = snapshot.hasChild("voltaje")
+                tieneTemperatura = snapshot.hasChild("temperatura")
+                tieneRayos = snapshot.hasChild("rayos_km")
                 voltaje = snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0
                 temperatura = snapshot.child("temperatura").getValue(Double::class.java) ?: 0.0
                 rayosDistancia = snapshot.child("rayos_km").getValue(Double::class.java) ?: 999.0
                 ultimaLecturaSensores = SimpleDateFormat("dd/MM HH:mm", Locale("es", "PE")).format(Date())
-                verificarTodoFirebase()
             }
             override fun onCancelled(e: DatabaseError) {}
         })
 
+        // ✅ SOLO MIRA SI estado = "ON" — SIN CONTAR MINUTOS
         db.child("sistema").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                ultimaConexionA = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
-                verificarEstadoSistemaA()
+                estadoSistemaA = snapshot.child("estado").getValue(String::class.java) ?: ""
+                sistemaAActivo = estadoSistemaA == "ON"
             }
             override fun onCancelled(e: DatabaseError) {}
         })
 
         db.child("monederoB/sistema").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                ultimaConexionB = snapshot.child("ultima_conexion").getValue(String::class.java) ?: ""
-                verificarEstadoSistemaB()
+                estadoSistemaB = snapshot.child("estado").getValue(String::class.java) ?: ""
+                sistemaBActivo = estadoSistemaB == "ON"
             }
             override fun onCancelled(e: DatabaseError) {}
         })
     }
 
-    // ✅ SISTEMA ON/OFF DEPENDE SOLO DE ultima_conexion — NO de los sensores
-    private fun verificarEstadoSistemaA() {
-        if (ultimaConexionA.isEmpty()) {
-            sistemaAActivo = false
-            return
-        }
-        try {
-            val fecha = formatoHoraFirebase.parse(ultimaConexionA)
-            val difMin = TimeUnit.MILLISECONDS.toMinutes(Date().time - fecha.time)
-            sistemaAActivo = difMin < TIEMPO_ESPERA_CONEXION
-        } catch (e: Exception) { sistemaAActivo = true }
-    }
-
-    private fun verificarEstadoSistemaB() {
-        if (ultimaConexionB.isEmpty()) {
-            sistemaBActivo = false
-            return
-        }
-        try {
-            val fecha = formatoHoraFirebase.parse(ultimaConexionB)
-            val difMin = TimeUnit.MILLISECONDS.toMinutes(Date().time - fecha.time)
-            sistemaBActivo = difMin < TIEMPO_ESPERA_CONEXION
-        } catch (e: Exception) { sistemaBActivo = true }
-    }
-
-    private fun verificarTodoFirebase() {
-        val db = FirebaseDatabase.getInstance().reference
-        
-        db.child("sensores").get().addOnSuccessListener { snap ->
-            voltaje = snap.child("voltaje").getValue(Double::class.java) ?: 0.0
-            temperatura = snap.child("temperatura").getValue(Double::class.java) ?: 0.0
-            rayosDistancia = snap.child("rayos_km").getValue(Double::class.java) ?: 999.0
-            ultimaLecturaSensores = SimpleDateFormat("dd/MM HH:mm", Locale("es", "PE")).format(Date())
-        }
-        
-        db.child("sistema").get().addOnSuccessListener { snap ->
-            ultimaConexionA = snap.child("ultima_conexion").getValue(String::class.java) ?: ""
-            verificarEstadoSistemaA()
-        }
-        
-        db.child("monederoB/sistema").get().addOnSuccessListener { snap ->
-            ultimaConexionB = snap.child("ultima_conexion").getValue(String::class.java) ?: ""
-            verificarEstadoSistemaB()
-        }
-    }
-
-    private fun forzarActualizacionManual() {
-        verificarTodoFirebase()
-        Toast.makeText(this, "✅ Actualizado", Toast.LENGTH_SHORT).show()
-    }
-
     private fun cargarSensoresGuardados() {
+        tieneVoltaje = prefs.getBoolean("tiene_voltaje", false)
+        tieneTemperatura = prefs.getBoolean("tiene_temperatura", false)
+        tieneRayos = prefs.getBoolean("tiene_rayos", false)
         voltaje = prefs.getFloat("ultimo_voltaje", 0f).toDouble()
         temperatura = prefs.getFloat("ultima_temperatura", 0f).toDouble()
         rayosDistancia = prefs.getFloat("rayos_distancia", 999f).toDouble()
         ultimaLecturaSensores = prefs.getString("ultima_lectura_sensores", "") ?: ""
-        ultimaConexionA = prefs.getString("ultima_conexion_a", "") ?: ""
-        ultimaConexionB = prefs.getString("ultima_conexion_b", "") ?: ""
-        verificarEstadoSistemaA()
-        verificarEstadoSistemaB()
+        estadoSistemaA = prefs.getString("estado_a", "") ?: ""
+        estadoSistemaB = prefs.getString("estado_b", "") ?: ""
+        sistemaAActivo = estadoSistemaA == "ON"
+        sistemaBActivo = estadoSistemaB == "ON"
     }
 
     private fun pedirClaveVaciado(monedero: String, claveCorrecta: String, onConfirmar: () -> Unit) {
@@ -581,14 +536,6 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun PantallaPrincipal() {
-        LaunchedEffect(Unit) {
-            while (true) {
-                verificarEstadoSistemaA()
-                verificarEstadoSistemaB()
-                delay(30000)
-            }
-        }
-
         Scaffold(modifier = Modifier.fillMaxSize(), containerColor = Color.White) { padding ->
             Column(
                 modifier = Modifier
@@ -603,7 +550,7 @@ class MainActivity : ComponentActivity() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("MONEDERO PAOYHAN", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    IconButton(onClick = { forzarActualizacionManual() }) {
+                    IconButton(onClick = { }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Actualizar", tint = Color(0xFF1976D2))
                     }
                 }
@@ -614,27 +561,28 @@ class MainActivity : ComponentActivity() {
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFEB3B))) {
                         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text("⚡ VOLTAJE", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            // ✅ Si el sistema está encendido Y hay valor → mostrar, si no → rayitas
-                            Text(if (sistemaAActivo && voltaje > 0) String.format("%.1f V", voltaje) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            // ✅ SI EXISTE EN FIREBASE → MOSTRAR, SI NO → RAYITAS
+                            Text(if (tieneVoltaje && sistemaAActivo) String.format("%.1f V", voltaje) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFCC80))) {
                         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text("🌡️ TEMPERATURA", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            // ✅ Si el sistema está encendido Y hay valor → mostrar, si no → rayitas
-                            Text(if (sistemaAActivo && temperatura > -100) String.format("%.1f °C", temperatura) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            // ✅ SI EXISTE EN FIREBASE → MOSTRAR, SI NO → RAYITAS
+                            Text(if (tieneTemperatura && sistemaAActivo) String.format("%.1f °C", temperatura) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     val colorRayos = when {
                         !sistemaAActivo -> Color(0xFF4CAF50)
+                        !tieneRayos -> Color(0xFF4CAF50)
                         rayosDistancia < DISTANCIA_PELIGRO -> Color(0xFFFF5252)
                         rayosDistancia <= 40.0 -> Color(0xFFFFC107)
                         else -> Color(0xFF4CAF50)
                     }
                     val textoRayos = when {
-                        !sistemaAActivo -> "-- km ✅"
+                        !sistemaAActivo || !tieneRayos -> "-- km ✅"
                         rayosDistancia < DISTANCIA_PELIGRO -> "${String.format("%.0f", rayosDistancia)} km ⚠️"
                         rayosDistancia <= 40.0 -> "${String.format("%.0f", rayosDistancia)} km"
                         else -> "-- km ✅"
@@ -645,11 +593,6 @@ class MainActivity : ComponentActivity() {
                             Text(textoRayos, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                     }
-                }
-
-                // ✅ Solo mostrar "Última lectura" si el sistema está encendido Y hay datos de sensores
-                if (sistemaAActivo && ultimaLecturaSensores.isNotEmpty()) {
-                    Text("Última lectura: $ultimaLecturaSensores", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -668,6 +611,7 @@ class MainActivity : ComponentActivity() {
                             Text("VACIAR", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                         Spacer(modifier = Modifier.height(8.dp))
+                        // ✅ SI Firebase dice "ON" → VERDE, SI NO → ROJO
                         val colorSistemaA = if (sistemaAActivo) Color(0xFF4CAF50) else Color(0xFFFF5252)
                         val textoSistemaA = if (sistemaAActivo) "SISTEMA ON" else "SISTEMA OFF"
                         Box(modifier = Modifier.fillMaxWidth().background(colorSistemaA, RoundedCornerShape(8.dp)).padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
