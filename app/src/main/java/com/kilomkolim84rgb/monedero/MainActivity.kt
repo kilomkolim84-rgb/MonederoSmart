@@ -58,7 +58,7 @@ const val CANAL_SERVICIO = "canal_servicio"
 const val ID_NOTIFICACION_SERVICIO = 12345
 const val DISTANCIA_PELIGRO = 8.0
 const val DISTANCIA_SEGURIDAD = 9.0
-const val TIEMPO_ESPERA_CONEXION = 15L
+const val TIEMPO_ESPERA_CONEXION = 2L
 
 data class Movimiento(
     val monedero: String = "A",
