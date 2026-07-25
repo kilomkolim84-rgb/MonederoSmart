@@ -539,12 +539,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun formatearMonto(monto: Double) = when {
-        monto == 0.10 -> "+0.10"
-        monto == 0.20 -> "+0.20"
-        monto == 0.50 -> "+0.50"
-        monto < 1.00 -> String.format("+%.2f", monto)
-        else -> String.format("+%.0f", monto)
+    // ✅ FUNCIÓN ARREGLADA: SIEMPRE MUESTRA 2 DECIMALES
+    private fun formatearMonto(monto: Double): String {
+        return String.format("+%.2f", monto)
     }
 
     @Composable
