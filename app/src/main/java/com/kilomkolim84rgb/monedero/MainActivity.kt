@@ -123,8 +123,7 @@ class MonederoServicio : Service() {
 
         escuchandoA = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                for (nivel1 in snapshot.children) {
-                    for (nivel2 in nivel1.children) {
+                    for (nivel2 in snapshot.children) {
                         val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
                         val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
                         val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
@@ -154,8 +153,7 @@ class MonederoServicio : Service() {
         val db = FirebaseDatabase.getInstance().reference
         escuchandoB = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                for (nivel1 in snapshot.children) {
-                    for (nivel2 in nivel1.children) {
+                    for (nivel2 in snapshot.children) {
                         val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
                         val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
                         val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
