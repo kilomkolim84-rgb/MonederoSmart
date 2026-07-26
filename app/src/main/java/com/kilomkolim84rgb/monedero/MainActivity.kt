@@ -123,25 +123,24 @@ class MonederoServicio : Service() {
 
         escuchandoA = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                    for (nivel2 in snapshot.children) {
-                        val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
-                        val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
-                        val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
-                        val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
-                        
-                        if (leido == true) continue
-                        if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
-                        if (monto <= 0.0) continue
+                for (nivel2 in snapshot.children) {
+                    val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
+                    val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
+                    val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
+                    val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+                    
+                    if (leido == true) continue
+                    if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
+                    if (monto <= 0.0) continue
 
-                        nivel2.ref.child("leido_por_monedero").setValue(true)
+                    nivel2.ref.child("leido_por_monedero").setValue(true)
 
-                        val totalActual = prefs.getFloat(TOTAL_A, 0f).toDouble()
-                        val nuevoTotal = totalActual + monto
-                        prefs.edit().putFloat(TOTAL_A, nuevoTotal.toFloat()).apply()
+                    val totalActual = prefs.getFloat(TOTAL_A, 0f).toDouble()
+                    val nuevoTotal = totalActual + monto
+                    prefs.edit().putFloat(TOTAL_A, nuevoTotal.toFloat()).apply()
 
-                        if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
-                        mostrarNotificacion("A", monto, nuevoTotal)
-                    }
+                    if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
+                    mostrarNotificacion("A", monto, nuevoTotal)
                 }
             }
             override fun onCancelled(e: DatabaseError) {}
@@ -153,25 +152,24 @@ class MonederoServicio : Service() {
         val db = FirebaseDatabase.getInstance().reference
         escuchandoB = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                    for (nivel2 in snapshot.children) {
-                        val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
-                        val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
-                        val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
-                        val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
-                        
-                        if (leido == true) continue
-                        if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
-                        if (monto <= 0.0) continue
+                for (nivel2 in snapshot.children) {
+                    val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
+                    val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
+                    val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
+                    val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+                    
+                    if (leido == true) continue
+                    if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
+                    if (monto <= 0.0) continue
 
-                        nivel2.ref.child("leido_por_monedero").setValue(true)
+                    nivel2.ref.child("leido_por_monedero").setValue(true)
 
-                        val totalActual = prefs.getFloat(TOTAL_B, 0f).toDouble()
-                        val nuevoTotal = totalActual + monto
-                        prefs.edit().putFloat(TOTAL_B, nuevoTotal.toFloat()).apply()
+                    val totalActual = prefs.getFloat(TOTAL_B, 0f).toDouble()
+                    val nuevoTotal = totalActual + monto
+                    prefs.edit().putFloat(TOTAL_B, nuevoTotal.toFloat()).apply()
 
-                        if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
-                        mostrarNotificacion("B", monto, nuevoTotal)
-                    }
+                    if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
+                    mostrarNotificacion("B", monto, nuevoTotal)
                 }
             }
             override fun onCancelled(e: DatabaseError) {}
@@ -309,42 +307,40 @@ class MainActivity : ComponentActivity() {
         
         setContent { PantallaPrincipal() }
         
+        // ✅ ARREGLADO: QUITADO BUCLE SOBRANTE
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                for (nivel1 in snapshot.children) {
-                    for (nivel2 in nivel1.children) {
-                        val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
-                        val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
-                        val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
-                        val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
-                        
-                        if (leido != true || codigo.length != 6 || monto <= 0.0) continue
-                        if (historial.any { it.codigo == codigo }) continue
-                        
-                        historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalA, codigo, "")) + historial
-                        guardarHistorial()
-                    }
+                for (nivel2 in snapshot.children) {
+                    val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
+                    val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
+                    val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
+                    val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+                    
+                    if (leido != true || codigo.length != 6 || monto <= 0.0) continue
+                    if (historial.any { it.codigo == codigo }) continue
+                    
+                    historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalA, codigo, "")) + historial
+                    guardarHistorial()
                 }
                 totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()
             }
             override fun onCancelled(e: DatabaseError) {}
         })
 
+        // ✅ ARREGLADO: QUITADO BUCLE SOBRANTE
         db.child("monederoB/historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                for (nivel1 in snapshot.children) {
-                    for (nivel2 in nivel1.children) {
-                        val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
-                        val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
-                        val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
-                        val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
-                        
-                        if (leido != true || codigo.length != 6 || monto <= 0.0) continue
-                        if (historial.any { it.codigo == codigo }) continue
-                        
-                        historial = listOf(Movimiento("B", fecha, "Ticket creado", monto, totalB, codigo, "")) + historial
-                        guardarHistorial()
-                    }
+                for (nivel2 in snapshot.children) {
+                    val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
+                    val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
+                    val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
+                    val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+                    
+                    if (leido != true || codigo.length != 6 || monto <= 0.0) continue
+                    if (historial.any { it.codigo == codigo }) continue
+                    
+                    historial = listOf(Movimiento("B", fecha, "Ticket creado", monto, totalB, codigo, "")) + historial
+                    guardarHistorial()
                 }
                 totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()
             }
