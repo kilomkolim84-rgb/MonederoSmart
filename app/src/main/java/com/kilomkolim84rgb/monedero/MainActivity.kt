@@ -134,6 +134,7 @@ class MonederoServicio : Service() {
                         if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
                         if (monto <= 0.0) continue
 
+                        // ✅ SOLO MARCA QUE LO LEYÓ, NO BORRA NI TOCA EL TICKET
                         nivel2.ref.child("leido_por_monedero").setValue(true)
 
                         val totalActual = prefs.getFloat(TOTAL_A, 0f).toDouble()
@@ -143,8 +144,7 @@ class MonederoServicio : Service() {
                         if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
                         mostrarNotificacion("A", monto, nuevoTotal)
 
-                        val leidoTicket = nivel2.child("leido_por_ticket").getValue(Boolean::class.java) ?: false
-                        if (leidoTicket) nivel2.ref.removeValue()
+                        // ❌ SE QUITÓ LA LÍNEA QUE BORRABA EL TICKET
                     }
                 }
             }
@@ -168,6 +168,7 @@ class MonederoServicio : Service() {
                         if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
                         if (monto <= 0.0) continue
 
+                        // ✅ SOLO MARCA QUE LO LEYÓ, NO BORRA NI TOCA EL TICKET
                         nivel2.ref.child("leido_por_monedero").setValue(true)
 
                         val totalActual = prefs.getFloat(TOTAL_B, 0f).toDouble()
@@ -177,8 +178,7 @@ class MonederoServicio : Service() {
                         if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
                         mostrarNotificacion("B", monto, nuevoTotal)
 
-                        val leidoTicket = nivel2.child("leido_por_ticket").getValue(Boolean::class.java) ?: false
-                        if (leidoTicket) nivel2.ref.removeValue()
+                        // ❌ SE QUITÓ LA LÍNEA QUE BORRABA EL TICKET
                     }
                 }
             }
@@ -577,14 +577,14 @@ class MainActivity : ComponentActivity() {
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFEB3B))) {
-                        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Alignment.CenterVertically) {
                             Text("⚡ VOLTAJE", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text(if (tieneVoltaje && sistemaAActivo) String.format("%.1f V", voltaje) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFCC80))) {
-                        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Alignment.CenterVertically) {
                             Text("🌡️ TEMPERATURA", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text(if (tieneTemperatura && sistemaAActivo) String.format("%.1f °C", temperatura) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         }
@@ -604,7 +604,7 @@ class MainActivity : ComponentActivity() {
                         else -> "-- km ✅"
                     }
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(colorRayos)) {
-                        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Alignment.CenterVertically) {
                             Text("⚠️ RAYOS", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text(textoRayos, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
