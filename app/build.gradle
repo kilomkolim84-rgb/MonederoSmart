@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace 'com.kilomkolim84rgb.monedero'
+    namespace 'com.cibercesarin.yape'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.kilomkolim84rgb.monedero"
+        applicationId "com.cibercesarin.yape"
         minSdk 24
         targetSdk 34
         versionCode 1
