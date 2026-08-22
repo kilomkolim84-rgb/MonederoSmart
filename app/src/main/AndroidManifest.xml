@@ -10,7 +10,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="MonederoSmart"
+        android:label="MonederoPaoyhan"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
