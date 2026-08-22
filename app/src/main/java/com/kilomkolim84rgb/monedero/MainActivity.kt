@@ -94,7 +94,7 @@ class MonederoServicio : Service() {
             }
         }
 
-        crearCanalesNotificaciones()
+        crearCanalServicio()
         val notificacion = NotificationCompat.Builder(this, CANAL_SERVICIO)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("MONEDERO PAOYHAN")
@@ -111,37 +111,11 @@ class MonederoServicio : Service() {
         escucharSistemaB()
     }
 
-    private fun crearCanalesNotificaciones() {
+    private fun crearCanalServicio() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // ✅ TU SONIDO PERSONALIZADO: pling.mp3
-            val sonidoUri = Uri.parse("android.resource://$packageName/raw/pling")
-            val atributosAudio = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
-
-            val canalServicio = NotificationChannel(
-                CANAL_SERVICIO,
-                "Servicio Monedero Paoyhan",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Escucha tickets en segundo plano"
-                // Sin sonido para el servicio
-            }
-
-            val canalAvisos = NotificationChannel(
-                CANAL_NOTIFICACIONES,
-                "Pagos Recibidos",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Suena cuando llega un pago nuevo"
-                enableVibration(true)
-                setSound(sonidoUri, atributosAudio) // 🔊 SONIDO PLING.MP3
-            }
-
-            val gestor = getSystemService(NotificationManager::class.java)
-            gestor.createNotificationChannel(canalServicio)
-            gestor.createNotificationChannel(canalAvisos)
+            val canal = NotificationChannel(CANAL_SERVICIO, "Servicio Monedero Paoyhan", NotificationManager.IMPORTANCE_LOW)
+            canal.description = "Escucha tickets en segundo plano"
+            getSystemService(NotificationManager::class.java).createNotificationChannel(canal)
         }
     }
 
@@ -260,7 +234,7 @@ class MonederoServicio : Service() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
-            .setDefaults(0) // ❌ Quitamos sonido por defecto — usamos el del canal
+            .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
             .build()
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
@@ -330,6 +304,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        crearCanalNotificaciones()
         pedirPermisoNotificaciones()
         
         setContent { PantallaPrincipal() }
@@ -535,6 +510,21 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
+    private fun crearCanalNotificaciones() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val sonidoUri = Uri.parse("android.resource://$packageName/raw/plin")
+            val atributosAudio = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+
+            val canal = NotificationChannel(CANAL_NOTIFICACIONES, "Monedero Paoyhan", NotificationManager.IMPORTANCE_HIGH)
+            canal.enableVibration(true)
+            canal.setSound(sonidoUri, atributosAudio)
+            getSystemService(NotificationManager::class.java).createNotificationChannel(canal)
+        }
+    }
+
     private fun pedirPermisoNotificaciones() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -583,7 +573,7 @@ class MainActivity : ComponentActivity() {
                         Column(
                             modifier = Modifier.fillMaxSize(),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Alignment.Center
+                            verticalArrangement = Arrangement.Center
                         ) {
                             Text("⚡ VOLTAJE", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text(if (tieneVoltaje && sistemaAActivo) String.format("%.1f V", voltaje) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -594,7 +584,7 @@ class MainActivity : ComponentActivity() {
                         Column(
                             modifier = Modifier.fillMaxSize(),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Alignment.Center
+                            verticalArrangement = Arrangement.Center
                         ) {
                             Text("🌡️ TEMPERATURA", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text(if (tieneTemperatura && sistemaAActivo) String.format("%.1f °C", temperatura) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -618,7 +608,7 @@ class MainActivity : ComponentActivity() {
                         Column(
                             modifier = Modifier.fillMaxSize(),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Alignment.Center
+                            verticalArrangement = Arrangement.Center
                         ) {
                             Text("⚠️ RAYOS", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text(textoRayos, fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -658,7 +648,7 @@ class MainActivity : ComponentActivity() {
                             Column(
                                 modifier = Modifier.padding(16.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Alignment.Center
+                                verticalArrangement = Arrangement.Center
                             ) {
                                 Text("MONEDERO B", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                 Text("TOTAL ACUMULADO", fontSize = 12.sp)
