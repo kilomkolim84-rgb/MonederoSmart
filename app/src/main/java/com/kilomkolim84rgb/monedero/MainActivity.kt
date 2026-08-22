@@ -8,6 +8,8 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.media.AudioAttributes
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
@@ -55,7 +57,7 @@ const val CANAL_SERVICIO = "canal_servicio"
 const val ID_NOTIFICACION_SERVICIO = 12345
 const val DISTANCIA_PELIGRO = 8.0
 const val DISTANCIA_SEGURIDAD = 9.0
-const val TIEMPO_LIMITE_SEGUNDOS = 62  // ✅ 1 MINUTO CON 2 SEGUNDOS
+const val TIEMPO_LIMITE_SEGUNDOS = 62
 
 data class Movimiento(
     val monedero: String = "A",
@@ -92,7 +94,7 @@ class MonederoServicio : Service() {
             }
         }
 
-        crearCanalServicio()
+        crearCanalesNotificaciones()
         val notificacion = NotificationCompat.Builder(this, CANAL_SERVICIO)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("MONEDERO PAOYHAN")
@@ -109,11 +111,37 @@ class MonederoServicio : Service() {
         escucharSistemaB()
     }
 
-    private fun crearCanalServicio() {
+    private fun crearCanalesNotificaciones() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val canal = NotificationChannel(CANAL_SERVICIO, "Servicio Monedero Paoyhan", NotificationManager.IMPORTANCE_LOW)
-            canal.description = "Escucha tickets en segundo plano"
-            getSystemService(NotificationManager::class.java).createNotificationChannel(canal)
+            // ✅ TU SONIDO PERSONALIZADO: pling.mp3
+            val sonidoUri = Uri.parse("android.resource://$packageName/raw/pling")
+            val atributosAudio = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+
+            val canalServicio = NotificationChannel(
+                CANAL_SERVICIO,
+                "Servicio Monedero Paoyhan",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Escucha tickets en segundo plano"
+                // Sin sonido para el servicio
+            }
+
+            val canalAvisos = NotificationChannel(
+                CANAL_NOTIFICACIONES,
+                "Pagos Recibidos",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Suena cuando llega un pago nuevo"
+                enableVibration(true)
+                setSound(sonidoUri, atributosAudio) // 🔊 SONIDO PLING.MP3
+            }
+
+            val gestor = getSystemService(NotificationManager::class.java)
+            gestor.createNotificationChannel(canalServicio)
+            gestor.createNotificationChannel(canalAvisos)
         }
     }
 
@@ -232,7 +260,7 @@ class MonederoServicio : Service() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
-            .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
+            .setDefaults(0) // ❌ Quitamos sonido por defecto — usamos el del canal
             .build()
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
@@ -302,12 +330,10 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        crearCanalNotificaciones()
         pedirPermisoNotificaciones()
         
         setContent { PantallaPrincipal() }
         
-        // ✅ ARREGLADO: QUITADO BUCLE SOBRANTE
         db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (nivel2 in snapshot.children) {
@@ -327,7 +353,6 @@ class MainActivity : ComponentActivity() {
             override fun onCancelled(e: DatabaseError) {}
         })
 
-        // ✅ ARREGLADO: QUITADO BUCLE SOBRANTE
         db.child("monederoB/historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (nivel2 in snapshot.children) {
@@ -510,14 +535,6 @@ class MainActivity : ComponentActivity() {
             .show()
     }
 
-    private fun crearCanalNotificaciones() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val canal = NotificationChannel(CANAL_NOTIFICACIONES, "Monedero Paoyhan", NotificationManager.IMPORTANCE_HIGH)
-            canal.enableVibration(true)
-            getSystemService(NotificationManager::class.java).createNotificationChannel(canal)
-        }
-    }
-
     private fun pedirPermisoNotificaciones() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -566,7 +583,7 @@ class MainActivity : ComponentActivity() {
                         Column(
                             modifier = Modifier.fillMaxSize(),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                            verticalArrangement = Alignment.Center
                         ) {
                             Text("⚡ VOLTAJE", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text(if (tieneVoltaje && sistemaAActivo) String.format("%.1f V", voltaje) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -577,7 +594,7 @@ class MainActivity : ComponentActivity() {
                         Column(
                             modifier = Modifier.fillMaxSize(),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                            verticalArrangement = Alignment.Center
                         ) {
                             Text("🌡️ TEMPERATURA", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text(if (tieneTemperatura && sistemaAActivo) String.format("%.1f °C", temperatura) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -601,7 +618,7 @@ class MainActivity : ComponentActivity() {
                         Column(
                             modifier = Modifier.fillMaxSize(),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                            verticalArrangement = Alignment.Center
                         ) {
                             Text("⚠️ RAYOS", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text(textoRayos, fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -641,7 +658,7 @@ class MainActivity : ComponentActivity() {
                             Column(
                                 modifier = Modifier.padding(16.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
+                                verticalArrangement = Alignment.Center
                             ) {
                                 Text("MONEDERO B", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                 Text("TOTAL ACUMULADO", fontSize = 12.sp)
