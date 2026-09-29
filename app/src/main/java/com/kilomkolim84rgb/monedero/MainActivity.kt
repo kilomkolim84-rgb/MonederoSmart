@@ -286,6 +286,10 @@ class MainActivity : ComponentActivity() {
         cargarHistorialGuardado()
         cargarDatosGuardados()
         
+        // ✅ AGREGA ESTO: CARGA LOS TOTALES GUARDADOS AL ABRIR
+        totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()
+        totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()
+        
         try { FirebaseApp.initializeApp(this) } catch (e: Exception) { }
         
         val db = FirebaseDatabase.getInstance().reference
