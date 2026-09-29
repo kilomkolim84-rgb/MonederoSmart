@@ -137,6 +137,7 @@ class MonederoServicio : Service() {
 
                     nivel2.ref.child("leido_por_monedero").setValue(true)
 
+                    // ✅ SOLO el Servicio suma y guarda
                     val totalActual = prefs.getFloat(TOTAL_A, 0f).toDouble()
                     val nuevoTotal = totalActual + monto
                     prefs.edit().putFloat(TOTAL_A, nuevoTotal.toFloat()).apply()
@@ -166,6 +167,7 @@ class MonederoServicio : Service() {
 
                     nivel2.ref.child("leido_por_monedero").setValue(true)
 
+                    // ✅ SOLO el Servicio suma y guarda
                     val totalActual = prefs.getFloat(TOTAL_B, 0f).toDouble()
                     val nuevoTotal = totalActual + monto
                     prefs.edit().putFloat(TOTAL_B, nuevoTotal.toFloat()).apply()
@@ -286,7 +288,7 @@ class MainActivity : ComponentActivity() {
         cargarHistorialGuardado()
         cargarDatosGuardados()
         
-        // ✅ AGREGA ESTO: CARGA LOS TOTALES GUARDADOS AL ABRIR
+        // ✅ Carga los totales guardados al abrir
         totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()
         totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()
         
@@ -311,8 +313,12 @@ class MainActivity : ComponentActivity() {
         
         setContent { PantallaPrincipal() }
         
-                db.child("historial").addValueEventListener(object : ValueEventListener {
+        // ✅ MainActivity SOLO LEE y MUESTRA — NO SUMA
+        db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
+                // Refresca el valor mostrado desde lo guardado
+                totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()
+                
                 for (nivel2 in snapshot.children) {
                     val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
                     val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
@@ -322,20 +328,20 @@ class MainActivity : ComponentActivity() {
                     if (leido != true || codigo.length != 6 || monto <= 0.0) continue
                     if (historial.any { it.codigo == codigo }) continue
                     
-                    // ✅ LEE + SUMA + GUARDA LOCAL
-                    val actual = prefs.getFloat(TOTAL_A, 0f).toDouble()
-                    totalA = actual + monto
-                    prefs.edit().putFloat(TOTAL_A, totalA.toFloat()).apply()
-                    
-                    historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalA, codigo, "")) + historial
+                    // ✅ SOLO lee el total ya guardado, NUNCA suma
+                    val totalGuardado = prefs.getFloat(TOTAL_A, 0f).toDouble()
+                    historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalGuardado, codigo, "")) + historial
                     guardarHistorial()
                 }
             }
             override fun onCancelled(e: DatabaseError) {}
         })
 
-                db.child("monederoB/historial").addValueEventListener(object : ValueEventListener {
+        db.child("monederoB/historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
+                // Refresca el valor mostrado desde lo guardado
+                totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()
+                
                 for (nivel2 in snapshot.children) {
                     val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
                     val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
@@ -345,12 +351,9 @@ class MainActivity : ComponentActivity() {
                     if (leido != true || codigo.length != 6 || monto <= 0.0) continue
                     if (historial.any { it.codigo == codigo }) continue
                     
-                    // ✅ LEE + SUMA + GUARDA LOCAL
-                    val actual = prefs.getFloat(TOTAL_B, 0f).toDouble()
-                    totalB = actual + monto
-                    prefs.edit().putFloat(TOTAL_B, totalB.toFloat()).apply()
-                    
-                    historial = listOf(Movimiento("B", fecha, "Ticket creado", monto, totalB, codigo, "")) + historial
+                    // ✅ SOLO lee el total ya guardado, NUNCA suma
+                    val totalGuardado = prefs.getFloat(TOTAL_B, 0f).toDouble()
+                    historial = listOf(Movimiento("B", fecha, "Ticket creado", monto, totalGuardado, codigo, "")) + historial
                     guardarHistorial()
                 }
             }
@@ -416,6 +419,8 @@ class MainActivity : ComponentActivity() {
 
     private fun actualizarManual() {
         cargarDatosGuardados()
+        totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()
+        totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()
         actualizarEstadoSistema()
         Toast.makeText(this, "✅ Actualizado", Toast.LENGTH_SHORT).show()
     }
