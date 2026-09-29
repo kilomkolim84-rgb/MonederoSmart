@@ -309,7 +309,7 @@ class MainActivity : ComponentActivity() {
         
         setContent { PantallaPrincipal() }
         
-        db.child("historial").addValueEventListener(object : ValueEventListener {
+                db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (nivel2 in snapshot.children) {
                     val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
@@ -320,9 +320,29 @@ class MainActivity : ComponentActivity() {
                     if (leido != true || codigo.length != 6 || monto <= 0.0) continue
                     if (historial.any { it.codigo == codigo }) continue
                     
-                    totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()  // ✅ LO PONES AQUÍ ARRIBA
-historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalA, codigo, "")) + historial
-guardarHistorial()
+                    totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()
+                    historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalA, codigo, "")) + historial
+                    guardarHistorial()
+                }
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        })
+
+        db.child("monederoB/historial").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                for (nivel2 in snapshot.children) {
+                    val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
+                    val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
+                    val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
+                    val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+                    
+                    if (leido != true || codigo.length != 6 || monto <= 0.0) continue
+                    if (historial.any { it.codigo == codigo }) continue
+                    
+                    totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()
+                    historial = listOf(Movimiento("B", fecha, "Ticket creado", monto, totalB, codigo, "")) + historial
+                    guardarHistorial()
+                }
             }
             override fun onCancelled(e: DatabaseError) {}
         })
