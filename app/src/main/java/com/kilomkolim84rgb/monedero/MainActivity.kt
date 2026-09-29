@@ -320,10 +320,9 @@ class MainActivity : ComponentActivity() {
                     if (leido != true || codigo.length != 6 || monto <= 0.0) continue
                     if (historial.any { it.codigo == codigo }) continue
                     
-                    historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalA, codigo, "")) + historial
-                    guardarHistorial()
-                }
-                totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()
+                    totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()  // ✅ LO PONES AQUÍ ARRIBA
+historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalA, codigo, "")) + historial
+guardarHistorial()
             }
             override fun onCancelled(e: DatabaseError) {}
         })
@@ -339,11 +338,10 @@ class MainActivity : ComponentActivity() {
                     if (leido != true || codigo.length != 6 || monto <= 0.0) continue
                     if (historial.any { it.codigo == codigo }) continue
                     
-                    historial = listOf(Movimiento("B", fecha, "Ticket creado", monto, totalB, codigo, "")) + historial
-                    guardarHistorial()
-                }
-                totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()
-            }
+                    totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()  // ✅ LO PONES AQUÍ ARRIBA
+historial = listOf(Movimiento("B", fecha, "Ticket creado", monto, totalB, codigo, "")) + historial
+guardarHistorial()
+}
             override fun onCancelled(e: DatabaseError) {}
         })
 
