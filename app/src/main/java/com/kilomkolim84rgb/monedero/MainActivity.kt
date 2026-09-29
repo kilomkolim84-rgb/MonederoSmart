@@ -127,16 +127,6 @@ class MonederoServicio : Service() {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (nivel2 in snapshot.children) {
                     val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
-                    val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
-                    val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
-                    val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
-                    
-                    if (leido == true) continue
-                    if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
-                    if (monto <= 0.0) continue
-
-                    nivel2.ref.child("leido_por_monedero").setValue(true)
-
                     val totalActual = prefs.getFloat(TOTAL_A, 0f).toDouble()
                     val nuevoTotal = totalActual + monto
                     prefs.edit().putFloat(TOTAL_A, nuevoTotal.toFloat()).apply()
@@ -156,15 +146,12 @@ class MonederoServicio : Service() {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (nivel2 in snapshot.children) {
                     val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
-                    val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
                     val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
                     val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
-                    
-                    if (leido == true) continue
+
                     if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
                     if (monto <= 0.0) continue
 
-                    nivel2.ref.child("leido_por_monedero").setValue(true)
 
                     val totalActual = prefs.getFloat(TOTAL_B, 0f).toDouble()
                     val nuevoTotal = totalActual + monto
@@ -322,7 +309,10 @@ class MainActivity : ComponentActivity() {
                     if (leido != true || codigo.length != 6 || monto <= 0.0) continue
                     if (historial.any { it.codigo == codigo }) continue
                     
-                    
+                    // ✅ LEE + SUMA + GUARDA LOCAL
+                    val actual = prefs.getFloat(TOTAL_A, 0f).toDouble()
+                    totalA = actual + monto
+                    prefs.edit().putFloat(TOTAL_A, totalA.toFloat()).apply()
                     
                     historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalA, codigo, "")) + historial
                     guardarHistorial()
@@ -342,7 +332,10 @@ class MainActivity : ComponentActivity() {
                     if (leido != true || codigo.length != 6 || monto <= 0.0) continue
                     if (historial.any { it.codigo == codigo }) continue
                     
-                    
+                    // ✅ LEE + SUMA + GUARDA LOCAL
+                    val actual = prefs.getFloat(TOTAL_B, 0f).toDouble()
+                    totalB = actual + monto
+                    prefs.edit().putFloat(TOTAL_B, totalB.toFloat()).apply()
                     
                     historial = listOf(Movimiento("B", fecha, "Ticket creado", monto, totalB, codigo, "")) + historial
                     guardarHistorial()
