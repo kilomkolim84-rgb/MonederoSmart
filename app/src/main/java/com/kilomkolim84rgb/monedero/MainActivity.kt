@@ -126,7 +126,12 @@ class MonederoServicio : Service() {
         escuchandoA = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (nivel2 in snapshot.children) {
-                    val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
+                   val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
+                     val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
+                    val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+
+                     if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
+                     if (monto <= 0.0) continue
                     val totalActual = prefs.getFloat(TOTAL_A, 0f).toDouble()
                     val nuevoTotal = totalActual + monto
                     prefs.edit().putFloat(TOTAL_A, nuevoTotal.toFloat()).apply()
