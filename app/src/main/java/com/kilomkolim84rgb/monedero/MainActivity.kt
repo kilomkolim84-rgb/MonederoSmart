@@ -80,7 +80,6 @@ class MonederoServicio : Service() {
     private var sensoresEscucha: ValueEventListener? = null
     private var sistemaAEscucha: ValueEventListener? = null
     private var sistemaBEscucha: ValueEventListener? = null
-    private var yaRecalculo = false // ✅ Para que lo haga UNA SOLA VEZ
 
     override fun onCreate() {
         super.onCreate()
@@ -105,43 +104,11 @@ class MonederoServicio : Service() {
             .build()
         startForeground(ID_NOTIFICACION_SERVICIO, notificacion)
 
-        // ✅ PRIMERO: RECALCULAR TODOS LOS TICKETS EXISTENTES
-        recalcularTotalesDesdeFirebase()
-
-        // ✅ DESPUÉS: ESCUCHAR TICKETS NUEVOS
         escucharHistorialA()
         escucharHistorialB()
         escucharSensores()
         escucharSistemaA()
         escucharSistemaB()
-    }
-
-    // ✅ SUMA TODOS LOS TICKETS SIN IMPORTAR SI ESTÁN MARCADOS
-    private fun recalcularTotalesDesdeFirebase() {
-        if (yaRecalculo) return
-        yaRecalculo = true
-
-        val db = FirebaseDatabase.getInstance().reference
-
-        // Sumar Monedero A
-        db.child("historial").get().addOnSuccessListener { snapshot ->
-            var suma = 0.0
-            for (item in snapshot.children) {
-                val monto = item.child("monto").getValue(Double::class.java) ?: 0.0
-                if (monto > 0.0) suma += monto
-            }
-            prefs.edit().putFloat(TOTAL_A, suma.toFloat()).apply()
-        }
-
-        // Sumar Monedero B
-        db.child("monederoB/historial").get().addOnSuccessListener { snapshot ->
-            var suma = 0.0
-            for (item in snapshot.children) {
-                val monto = item.child("monto").getValue(Double::class.java) ?: 0.0
-                if (monto > 0.0) suma += monto
-            }
-            prefs.edit().putFloat(TOTAL_B, suma.toFloat()).apply()
-        }
     }
 
     private fun crearCanalServicio() {
@@ -162,8 +129,9 @@ class MonederoServicio : Service() {
                     val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
                     val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
                     val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
+                    val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
                     
-                    if (leido == true) continue // ✅ Solo nuevos
+                    if (leido == true) continue
                     if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
                     if (monto <= 0.0) continue
 
@@ -190,8 +158,9 @@ class MonederoServicio : Service() {
                     val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
                     val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
                     val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
+                    val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
                     
-                    if (leido == true) continue // ✅ Solo nuevos
+                    if (leido == true) continue
                     if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
                     if (monto <= 0.0) continue
 
@@ -317,7 +286,7 @@ class MainActivity : ComponentActivity() {
         cargarHistorialGuardado()
         cargarDatosGuardados()
         
-        // ✅ CARGA INMEDIATA DE LOS TOTALES GUARDADOS
+        // ✅ AGREGA ESTO: CARGA LOS TOTALES GUARDADOS AL ABRIR
         totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()
         totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()
         
@@ -342,10 +311,8 @@ class MainActivity : ComponentActivity() {
         
         setContent { PantallaPrincipal() }
         
-        // ✅ MainActivity SOLO LEE — NUNCA SUMA
-        db.child("historial").addValueEventListener(object : ValueEventListener {
+                db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                totalA = prefs.getFloat(TOTAL_A, 0f).toDouble() // Refresca
                 for (nivel2 in snapshot.children) {
                     val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
                     val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
@@ -355,17 +322,17 @@ class MainActivity : ComponentActivity() {
                     if (leido != true || codigo.length != 6 || monto <= 0.0) continue
                     if (historial.any { it.codigo == codigo }) continue
                     
-                    val totalGuardado = prefs.getFloat(TOTAL_A, 0f).toDouble()
-                    historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalGuardado, codigo, "")) + historial
+                    totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()
+                    
+                    historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalA, codigo, "")) + historial
                     guardarHistorial()
                 }
             }
             override fun onCancelled(e: DatabaseError) {}
         })
 
-        db.child("monederoB/historial").addValueEventListener(object : ValueEventListener {
+                db.child("monederoB/historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                totalB = prefs.getFloat(TOTAL_B, 0f).toDouble() // Refresca
                 for (nivel2 in snapshot.children) {
                     val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
                     val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
@@ -375,8 +342,9 @@ class MainActivity : ComponentActivity() {
                     if (leido != true || codigo.length != 6 || monto <= 0.0) continue
                     if (historial.any { it.codigo == codigo }) continue
                     
-                    val totalGuardado = prefs.getFloat(TOTAL_B, 0f).toDouble()
-                    historial = listOf(Movimiento("B", fecha, "Ticket creado", monto, totalGuardado, codigo, "")) + historial
+                    totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()
+                    
+                    historial = listOf(Movimiento("B", fecha, "Ticket creado", monto, totalB, codigo, "")) + historial
                     guardarHistorial()
                 }
             }
@@ -442,8 +410,6 @@ class MainActivity : ComponentActivity() {
 
     private fun actualizarManual() {
         cargarDatosGuardados()
-        totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()
-        totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()
         actualizarEstadoSistema()
         Toast.makeText(this, "✅ Actualizado", Toast.LENGTH_SHORT).show()
     }
