@@ -307,7 +307,7 @@ class MainActivity : ComponentActivity() {
         
         setContent { PantallaPrincipal() }
         
-        db.child("historial").addValueEventListener(object : ValueEventListener {
+                db.child("historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (nivel2 in snapshot.children) {
                     val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
@@ -318,16 +318,19 @@ class MainActivity : ComponentActivity() {
                     if (leido != true || codigo.length != 6 || monto <= 0.0) continue
                     if (historial.any { it.codigo == codigo }) continue
                     
-                    totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()  // ✅ AGREGA ESTA LÍNEA
+                    // ✅ LEE + SUMA + GUARDA LOCAL
+                    val actual = prefs.getFloat(TOTAL_A, 0f).toDouble()
+                    totalA = actual + monto
+                    prefs.edit().putFloat(TOTAL_A, totalA.toFloat()).apply()
+                    
                     historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalA, codigo, "")) + historial
                     guardarHistorial()
                 }
-                totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()
             }
             override fun onCancelled(e: DatabaseError) {}
         })
 
-        db.child("monederoB/historial").addValueEventListener(object : ValueEventListener {
+                db.child("monederoB/historial").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (nivel2 in snapshot.children) {
                     val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
@@ -338,11 +341,14 @@ class MainActivity : ComponentActivity() {
                     if (leido != true || codigo.length != 6 || monto <= 0.0) continue
                     if (historial.any { it.codigo == codigo }) continue
                     
-                    totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()  // ✅ AGREGA ESTA LÍNEA
+                    // ✅ LEE + SUMA + GUARDA LOCAL
+                    val actual = prefs.getFloat(TOTAL_B, 0f).toDouble()
+                    totalB = actual + monto
+                    prefs.edit().putFloat(TOTAL_B, totalB.toFloat()).apply()
+                    
                     historial = listOf(Movimiento("B", fecha, "Ticket creado", monto, totalB, codigo, "")) + historial
                     guardarHistorial()
                 }
-                totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()
             }
             override fun onCancelled(e: DatabaseError) {}
         })
