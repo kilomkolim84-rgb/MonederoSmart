@@ -143,8 +143,8 @@ class MonederoServicio : Service() {
                     val nuevoTotal = totalActual + monto
                     prefs.edit().putFloat(TOTAL_A, nuevoTotal.toFloat()).apply()
 
-                    val reproductor = MediaPlayer.create(this, Uri.parse("android.resource://$packageName/raw/plin"))
-reproductor?.setOnCompletionListener { it.release() }
+                    val reproductor = MediaPlayer.create(this, R.raw.plin)
+reproductor?.setOnCompletionListener { release() }
 reproductor?.start()
                     mostrarNotificacion("A", monto, nuevoTotal)
                 }
