@@ -49,6 +49,8 @@ import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlinx.coroutines.delay
+import android.media.MediaPlayer
+
 
 const val CLAVE_VACIADO_A = "222777"
 const val CLAVE_VACIADO_B = "333888"
@@ -141,7 +143,9 @@ class MonederoServicio : Service() {
                     val nuevoTotal = totalActual + monto
                     prefs.edit().putFloat(TOTAL_A, nuevoTotal.toFloat()).apply()
 
-                    if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
+                    val reproductor = MediaPlayer.create(this, Uri.parse("android.resource://$packageName/raw/plin"))
+reproductor?.setOnCompletionListener { it.release() }
+reproductor?.start()
                     mostrarNotificacion("A", monto, nuevoTotal)
                 }
             }
@@ -236,7 +240,7 @@ class MonederoServicio : Service() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
-            .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
+            .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
             .build()
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
@@ -513,19 +517,22 @@ db.child("monederoB/historial").addValueEventListener(object : ValueEventListene
     }
 
     private fun crearCanalNotificaciones() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val sonidoUri = Uri.parse("android.resource://$packageName/raw/plin")
-            val atributosAudio = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val sonidoUri = Uri.parse("android.resource://$packageName/raw/plin")
+        val atributosAudio = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
 
-            val canal = NotificationChannel(CANAL_NOTIFICACIONES, "Monedero Paoyhan", NotificationManager.IMPORTANCE_HIGH)
-            canal.enableVibration(true)
-            canal.setSound(sonidoUri, atributosAudio)
-            getSystemService(NotificationManager::class.java).createNotificationChannel(canal)
-        }
+        val canal = NotificationChannel(CANAL_NOTIFICACIONES, "Monedero Paoyhan", NotificationManager.IMPORTANCE_HIGH)
+        canal.enableVibration(true)
+        canal.setSound(sonidoUri, atributosAudio)
+        
+        // Borra el canal viejo y crea uno nuevo
+        getSystemService(NotificationManager::class.java).deleteNotificationChannel(CANAL_NOTIFICACIONES)
+        getSystemService(NotificationManager::class.java).createNotificationChannel(canal)
     }
+}
 
     private fun pedirPermisoNotificaciones() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
