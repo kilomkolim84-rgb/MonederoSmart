@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -49,8 +50,6 @@ import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlinx.coroutines.delay
-import android.media.MediaPlayer
-
 
 const val CLAVE_VACIADO_A = "222777"
 const val CLAVE_VACIADO_B = "333888"
@@ -98,6 +97,7 @@ class MonederoServicio : Service() {
 
         crearCanalServicio()
         crearCanalNotificaciones()
+        
         val notificacion = NotificationCompat.Builder(this, CANAL_SERVICIO)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("MONEDERO PAOYHAN")
@@ -114,8 +114,13 @@ class MonederoServicio : Service() {
 
     private fun crearCanalServicio() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val canal = NotificationChannel(CANAL_SERVICIO, "Servicio Monedero Paoyhan", NotificationManager.IMPORTANCE_LOW)
-            canal.description = "Escucha tickets en segundo plano"
+            val canal = NotificationChannel(
+                CANAL_SERVICIO,
+                "Servicio Monedero Paoyhan",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Escucha tickets en segundo plano"
+            }
             getSystemService(NotificationManager::class.java).createNotificationChannel(canal)
         }
     }
@@ -128,11 +133,17 @@ class MonederoServicio : Service() {
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build()
 
-            val canal = NotificationChannel(CANAL_NOTIFICACIONES, "Monedero Paoyhan", NotificationManager.IMPORTANCE_HIGH)
-            canal.enableVibration(true)
-            canal.setSound(sonidoUri, atributosAudio)
-            canal.setShowBadge(true)
-            canal.enableLights(true)
+            val canal = NotificationChannel(
+                CANAL_NOTIFICACIONES,
+                "Pagos Recibidos",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Notificaciones de pagos en monedero"
+                enableVibration(true)
+                setSound(sonidoUri, atributosAudio)
+                enableLights(true)
+                lightColor = 0xFFFFCC00.toInt()
+            }
             
             getSystemService(NotificationManager::class.java).deleteNotificationChannel(CANAL_NOTIFICACIONES)
             getSystemService(NotificationManager::class.java).createNotificationChannel(canal)
@@ -256,9 +267,10 @@ class MonederoServicio : Service() {
 
         val aviso = NotificationCompat.Builder(this, CANAL_NOTIFICACIONES)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
-            .setContentTitle("✅ MONEDERO $monedero — Pago Recibido")
+            .setContentTitle("✅ PAGO RECIBIDO — Monedero $monedero")
             .setContentText("S/ ${String.format("%.2f", monto)}")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("Monedero $monedero recibió S/ ${String.format("%.2f", monto)}\nTotal: S/ ${String.format("%.2f", total)}"))
+            .setStyle(NotificationCompat.BigTextStyle()
+                .bigText("Monedero $monedero recibió S/ ${String.format("%.2f", monto)}\nTotal: S/ ${String.format("%.2f", total)}"))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
@@ -269,9 +281,7 @@ class MonederoServicio : Service() {
 
         val idNotificacion = System.currentTimeMillis().toInt()
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-            with(NotificationManagerCompat.from(this)) {
-                notify(idNotificacion, aviso)
-            }
+            NotificationManagerCompat.from(this).notify(idNotificacion, aviso)
         }
     }
 
@@ -367,9 +377,7 @@ class MainActivity : ComponentActivity() {
         })
 
         db.child("monederoB/historial").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                return
-            }
+            override fun onDataChange(snapshot: DataSnapshot) {}
             override fun onCancelled(e: DatabaseError) {}
         })
 
