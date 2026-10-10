@@ -97,6 +97,7 @@ class MonederoServicio : Service() {
         }
 
         crearCanalServicio()
+        crearCanalNotificaciones()
         val notificacion = NotificationCompat.Builder(this, CANAL_SERVICIO)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("MONEDERO PAOYHAN")
@@ -107,16 +108,33 @@ class MonederoServicio : Service() {
         startForeground(ID_NOTIFICACION_SERVICIO, notificacion)
 
         escucharHistorialA()
-        //escucharHistorialB()
         escucharSensores()
         escucharSistemaA()
-        //escucharSistemaB()
     }
 
     private fun crearCanalServicio() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val canal = NotificationChannel(CANAL_SERVICIO, "Servicio Monedero Paoyhan", NotificationManager.IMPORTANCE_LOW)
             canal.description = "Escucha tickets en segundo plano"
+            getSystemService(NotificationManager::class.java).createNotificationChannel(canal)
+        }
+    }
+
+    private fun crearCanalNotificaciones() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val sonidoUri = Uri.parse("android.resource://$packageName/raw/plin")
+            val atributosAudio = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+
+            val canal = NotificationChannel(CANAL_NOTIFICACIONES, "Monedero Paoyhan", NotificationManager.IMPORTANCE_HIGH)
+            canal.enableVibration(true)
+            canal.setSound(sonidoUri, atributosAudio)
+            canal.setShowBadge(true)
+            canal.enableLights(true)
+            
+            getSystemService(NotificationManager::class.java).deleteNotificationChannel(CANAL_NOTIFICACIONES)
             getSystemService(NotificationManager::class.java).createNotificationChannel(canal)
         }
     }
@@ -144,8 +162,9 @@ class MonederoServicio : Service() {
                     prefs.edit().putFloat(TOTAL_A, nuevoTotal.toFloat()).apply()
 
                     val reproductor = MediaPlayer.create(this@MonederoServicio, R.raw.plin)
-reproductor?.setOnCompletionListener { it.release() }
-reproductor?.start()
+                    reproductor?.setOnCompletionListener { it.release() }
+                    reproductor?.start()
+                    
                     mostrarNotificacion("A", monto, nuevoTotal)
                 }
             }
@@ -155,7 +174,6 @@ reproductor?.start()
     }
 
     private fun escucharHistorialB() {
-    return
         val db = FirebaseDatabase.getInstance().reference
         escuchandoB = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -217,7 +235,6 @@ reproductor?.start()
     }
 
     private fun escucharSistemaB() {
-    return
         val db = FirebaseDatabase.getInstance().reference
         sistemaBEscucha = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -230,7 +247,12 @@ reproductor?.start()
 
     private fun mostrarNotificacion(monedero: String, monto: Double, total: Double) {
         val intent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            System.currentTimeMillis().toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
         val aviso = NotificationCompat.Builder(this, CANAL_NOTIFICACIONES)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
@@ -238,13 +260,18 @@ reproductor?.start()
             .setContentText("S/ ${String.format("%.2f", monto)}")
             .setStyle(NotificationCompat.BigTextStyle().bigText("Monedero $monedero recibió S/ ${String.format("%.2f", monto)}\nTotal: S/ ${String.format("%.2f", total)}"))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
 
+        val idNotificacion = System.currentTimeMillis().toInt()
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-            NotificationManagerCompat.from(this).notify(1001 + monedero.hashCode(), aviso)
+            with(NotificationManagerCompat.from(this)) {
+                notify(idNotificacion, aviso)
+            }
         }
     }
 
@@ -253,10 +280,10 @@ reproductor?.start()
     override fun onDestroy() {
         super.onDestroy()
         escuchandoA?.let { FirebaseDatabase.getInstance().reference.child("historial").removeEventListener(it) }
-        //escuchandoB?.let { FirebaseDatabase.getInstance().reference.child("monederoB/historial").removeEventListener(it) }
+        escuchandoB?.let { FirebaseDatabase.getInstance().reference.child("monederoB/historial").removeEventListener(it) }
         sensoresEscucha?.let { FirebaseDatabase.getInstance().reference.child("sensores").removeEventListener(it) }
         sistemaAEscucha?.let { FirebaseDatabase.getInstance().reference.child("sistema").removeEventListener(it) }
-        //sistemaBEscucha?.let { FirebaseDatabase.getInstance().reference.child("monederoB/sistema").removeEventListener(it) }
+        sistemaBEscucha?.let { FirebaseDatabase.getInstance().reference.child("monederoB/sistema").removeEventListener(it) }
         tts?.stop()
         tts?.shutdown()
     }
@@ -292,7 +319,6 @@ class MainActivity : ComponentActivity() {
         cargarHistorialGuardado()
         cargarDatosGuardados()
         
-        // ✅ AGREGA ESTO: CARGA LOS TOTALES GUARDADOS AL ABRIR
         totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()
         totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()
         
@@ -312,45 +338,40 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        crearCanalNotificaciones()
         pedirPermisoNotificaciones()
         
         setContent { PantallaPrincipal() }
         
-                db.child("historial").addValueEventListener(object : ValueEventListener {
-    override fun onDataChange(snapshot: DataSnapshot) {
-        var totalDesdeFirebase = 0.0
-        val nuevaLista = mutableListOf<Movimiento>()
+        db.child("historial").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                var totalDesdeFirebase = 0.0
+                val nuevaLista = mutableListOf<Movimiento>()
 
-        for (nivel2 in snapshot.children) {
-            val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
-            val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
-            val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
-            
-            if (codigo.length != 6 || monto <= 0.0) continue
-            if (nuevaLista.any { it.codigo == codigo }) continue
-            
-            totalDesdeFirebase += monto
-            nuevaLista.add(Movimiento("A", fecha, "Ticket creado", monto, totalDesdeFirebase, codigo, ""))
-        }
+                for (nivel2 in snapshot.children) {
+                    val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
+                    val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
+                    val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+                    
+                    if (codigo.length != 6 || monto <= 0.0) continue
+                    if (nuevaLista.any { it.codigo == codigo }) continue
+                    
+                    totalDesdeFirebase += monto
+                    nuevaLista.add(Movimiento("A", fecha, "Ticket creado", monto, totalDesdeFirebase, codigo, ""))
+                }
 
-        totalA = totalDesdeFirebase
-        historial = nuevaLista.reversed()
-        guardarHistorial()
-    }
-    override fun onCancelled(e: DatabaseError) {}
-})
+                totalA = totalDesdeFirebase
+                historial = nuevaLista.reversed()
+                guardarHistorial()
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        })
 
-                // MONEDERO B — CONGELADO TOTALMENTE
-db.child("monederoB/historial").addValueEventListener(object : ValueEventListener {
-    override fun onDataChange(snapshot: DataSnapshot) {
-        // ANULADO — NO PROCESA NADA
-        return
-    }
-    override fun onCancelled(e: DatabaseError) {
-        // ANULADO
-    }
-})
+        db.child("monederoB/historial").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                return
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        })
 
         db.child("sensores").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -375,7 +396,6 @@ db.child("monederoB/historial").addValueEventListener(object : ValueEventListene
 
         db.child("monederoB/sistema").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-            return
                 sistemaBActivo = snapshot.child("estado").getValue(String::class.java) == "ON"
             }
             override fun onCancelled(e: DatabaseError) {}
@@ -515,24 +535,6 @@ db.child("monederoB/historial").addValueEventListener(object : ValueEventListene
             .setNegativeButton("CANCELAR", null)
             .show()
     }
-
-    private fun crearCanalNotificaciones() {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val sonidoUri = Uri.parse("android.resource://$packageName/raw/plin")
-        val atributosAudio = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
-
-        val canal = NotificationChannel(CANAL_NOTIFICACIONES, "Monedero Paoyhan", NotificationManager.IMPORTANCE_HIGH)
-        canal.enableVibration(true)
-        canal.setSound(sonidoUri, atributosAudio)
-        
-        // Borra el canal viejo y crea uno nuevo
-        getSystemService(NotificationManager::class.java).deleteNotificationChannel(CANAL_NOTIFICACIONES)
-        getSystemService(NotificationManager::class.java).createNotificationChannel(canal)
-    }
-}
 
     private fun pedirPermisoNotificaciones() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
