@@ -168,13 +168,17 @@ class MonederoServicio : Service() {
                     val nuevoTotal = totalActual + monto
                     prefs.edit().putFloat(TOTAL_A, nuevoTotal.toFloat()).apply()
 
-                    mostrarNotificacion("A", monto, nuevoTotal)
-
+                    // 🔊 PRIMERO: EL SONIDO — siempre intenta reproducir
                     try {
                         val reproductor = MediaPlayer.create(this@MonederoServicio, R.raw.plin)
                         reproductor?.setOnCompletionListener { it.release() }
                         reproductor?.start()
-                    } catch (_: Exception) { }
+                    } catch (e: Exception) {
+                        android.util.Log.e("MONEDERO", "Error al reproducir sonido", e)
+                    }
+
+                    // 📢 SEGUNDO: LA NOTIFICACIÓN
+                    mostrarNotificacion("A", monto, nuevoTotal)
                 }
             }
             override fun onCancelled(e: DatabaseError) {}
@@ -237,8 +241,11 @@ class MonederoServicio : Service() {
             .build()
 
         val idNotificacion = System.currentTimeMillis().toInt()
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+        // ✅ Intenta mandar sin condición de permiso
+        try {
             NotificationManagerCompat.from(this).notify(idNotificacion, aviso)
+        } catch (e: SecurityException) {
+            android.util.Log.w("MONEDERO", "Notificación no enviada: ${e.message}")
         }
     }
 
