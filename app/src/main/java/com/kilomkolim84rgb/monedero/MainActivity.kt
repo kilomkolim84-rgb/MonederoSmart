@@ -142,7 +142,6 @@ class MonederoServicio : Service() {
                 setShowBadge(true)
             }
             
-            getSystemService(NotificationManager::class.java).deleteNotificationChannel(CANAL_NOTIFICACIONES)
             getSystemService(NotificationManager::class.java).createNotificationChannel(canal)
         }
     }
@@ -234,7 +233,6 @@ class MonederoServicio : Service() {
             .setStyle(NotificationCompat.BigTextStyle()
                 .bigText("Monedero $monedero recibió S/ ${String.format("%.2f", monto)}\nTotal: S/ ${String.format("%.2f", total)}"))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
