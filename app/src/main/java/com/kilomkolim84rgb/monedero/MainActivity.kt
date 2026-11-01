@@ -123,7 +123,7 @@ class MonederoServicio : Service() {
 
     private fun crearCanalNotificaciones() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val sonidoUri = Uri.parse("android.resource://$packageName/raw/plin")
+            val sonidoUri = Uri.parse("android.resource://$packageName/raw/yape")
             val atributosAudio = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
