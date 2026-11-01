@@ -74,7 +74,7 @@ class MonederoServicio : Service() {
     private var vozLista = false
     private lateinit var prefs: SharedPreferences
     private val TOTAL_A = "total_acumulado_a"
-    private var escuchandoA: ValueEventListener? = null
+    private var escuchandoA: ChildEventListener? = null
     private var sensoresEscucha: ValueEventListener? = null
     private var sistemaAEscucha: ValueEventListener? = null
 
@@ -97,7 +97,7 @@ class MonederoServicio : Service() {
         val notificacion = NotificationCompat.Builder(this, CANAL_SERVICIO)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("MONEDERO PAOYHAN")
-            .setContentText("✅ Escuchando tickets...")
+            .setContentText(" Escuchando tickets...")
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .build()
@@ -146,36 +146,36 @@ class MonederoServicio : Service() {
         }
     }
 
-    private fun escucharHistorialA() {
+        private fun escucharHistorialA() {
         val db = FirebaseDatabase.getInstance().reference
         db.keepSynced(true)
 
-        escuchandoA = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                for (nivel2 in snapshot.children) {
-                    val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
-                    val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
-                    val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
-                    
-                    if (leido == true) continue
-                    if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
-                    if (monto <= 0.0) continue
+        escuchandoA = object : ChildEventListener {
+            override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
+                val codigo = snapshot.child("codigo").getValue(String::class.java) ?: ""
+                val leido = snapshot.child("leido_por_monedero").getValue(Boolean::class.java)
+                val monto = snapshot.child("monto").getValue(Double::class.java) ?: 0.0
+                
+                if (leido == true) return
+                if (codigo.length != 6 || !codigo.all { it.isDigit() }) return
+                if (monto <= 0.0) return
 
-                    nivel2.ref.child("leido_por_monedero").setValue(true)
+                snapshot.ref.child("leido_por_monedero").setValue(true)
 
-                    val totalActual = prefs.getFloat(TOTAL_A, 0f).toDouble()
-                    val nuevoTotal = totalActual + monto
-                    prefs.edit().putFloat(TOTAL_A, nuevoTotal.toFloat()).apply()
+                val totalActual = prefs.getFloat(TOTAL_A, 0f).toDouble()
+                val nuevoTotal = totalActual + monto
+                prefs.edit().putFloat(TOTAL_A, nuevoTotal.toFloat()).apply()
 
-                    // 🔊 PRIMERO: EL SONIDO — siempre intenta reproducir
-
-                    // 📢 SEGUNDO: LA NOTIFICACIÓN
-                    mostrarNotificacion("A", monto, nuevoTotal)
-                }
+                mostrarNotificacion("A", monto, nuevoTotal)
             }
-            override fun onCancelled(e: DatabaseError) {}
+
+            override fun onCancelled(error: DatabaseError) {}
+            override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) {}
+            override fun onChildRemoved(snapshot: DataSnapshot) {}
+            override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) {}
         }
-        db.child("historial").addValueEventListener(escuchandoA!!)
+        
+        db.child("historial").addChildEventListener(escuchandoA!!)
     }
 
     private fun escucharSensores() {
@@ -221,7 +221,7 @@ class MonederoServicio : Service() {
 
         val aviso = NotificationCompat.Builder(this, CANAL_NOTIFICACIONES)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("✅ PAGO RECIBIDO — Monedero $monedero")
+            .setContentTitle(" PAGO RECIBIDO — Monedero $monedero")
             .setContentText("S/ ${String.format("%.2f", monto)}")
             .setStyle(NotificationCompat.BigTextStyle()
                 .bigText("Monedero $monedero recibió S/ ${String.format("%.2f", monto)}\nTotal: S/ ${String.format("%.2f", total)}"))
@@ -232,13 +232,12 @@ class MonederoServicio : Service() {
             .build()
 
         val idNotificacion = System.currentTimeMillis().toInt()
-        // ✅ Intenta mandar sin condición de permiso
-        if (ContextCompat.checkSelfPermission(
-        this,
-        Manifest.permission.POST_NOTIFICATIONS
-    ) == PackageManager.PERMISSION_GRANTED
-) {
+        //  Intenta mandar sin condición de permiso
+   // ✅ AHORA — Intenta SIEMPRE, solo captura el error si falla
+try {
     NotificationManagerCompat.from(this).notify(idNotificacion, aviso)
+} catch (e: SecurityException) {
+    android.util.Log.e("MONEDERO", "Permiso denegado: ${e.message}")
 }
     }
 
@@ -380,7 +379,7 @@ class MainActivity : ComponentActivity() {
     private fun actualizarManual() {
         cargarDatosGuardados()
         actualizarEstadoSistema()
-        Toast.makeText(this, "✅ Actualizado", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, " Actualizado", Toast.LENGTH_SHORT).show()
     }
 
     private fun pedirClaveVaciado() {
@@ -405,9 +404,9 @@ class MainActivity : ComponentActivity() {
                 if (campoClave.text.toString() == CLAVE_VACIADO_A) {
                     totalA = 0.0
                     prefs.edit().putFloat(TOTAL_A, 0f).apply()
-                    Toast.makeText(this, "✅ Monedero vaciado", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, " Monedero vaciado", Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(this, "❌ Clave incorrecta", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, " Clave incorrecta", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("CANCELAR", null)
@@ -439,11 +438,11 @@ class MainActivity : ComponentActivity() {
     private fun limpiarHistorial() {
         AlertDialog.Builder(this)
             .setTitle("LIMPIAR HISTORIAL")
-            .setMessage("¿Borrar todo el historial?\n⚠️ No afecta el total.")
+            .setMessage("¿Borrar todo el historial?\n No afecta el total.")
             .setPositiveButton("SÍ") { _, _ ->
                 historial = emptyList()
                 prefs.edit().remove(HISTORIAL_GUARDADO).apply()
-                Toast.makeText(this, "✅ Historial limpiado", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, " Historial limpiado", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("CANCELAR", null)
             .show()
@@ -499,7 +498,7 @@ class MainActivity : ComponentActivity() {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            Text("⚡ VOLTAJE", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(" VOLTAJE", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text(if (tieneVoltaje && sistemaAActivo) String.format("%.1f V", voltaje) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -510,7 +509,7 @@ class MainActivity : ComponentActivity() {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            Text("🌡️ TEMPERATURA", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(" TEMPERATURA", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text(if (tieneTemperatura && sistemaAActivo) String.format("%.1f °C", temperatura) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -523,10 +522,10 @@ class MainActivity : ComponentActivity() {
                         else -> Color(0xFF4CAF50)
                     }
                     val textoRayos = when {
-                        !sistemaAActivo || !tieneRayos -> "-- km ✅"
-                        rayosDistancia < DISTANCIA_PELIGRO -> "${String.format("%.0f", rayosDistancia)} km ⚠️"
+                        !sistemaAActivo || !tieneRayos -> "-- km "
+                        rayosDistancia < DISTANCIA_PELIGRO -> "${String.format("%.0f", rayosDistancia)} km "
                         rayosDistancia <= 40.0 -> "${String.format("%.0f", rayosDistancia)} km"
-                        else -> "-- km ✅"
+                        else -> "-- km "
                     }
                     Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(colorRayos)) {
                         Column(
@@ -534,7 +533,7 @@ class MainActivity : ComponentActivity() {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            Text("⚠️ RAYOS", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(" RAYOS", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text(textoRayos, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -587,7 +586,7 @@ class MainActivity : ComponentActivity() {
                                     Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                                         Card(modifier = Modifier.size(45.dp), shape = RoundedCornerShape(6.dp)) {
                                             Box(contentAlignment = Alignment.Center) {
-                                                Text("🟡", fontSize = 20.sp)
+                                                Text("", fontSize = 20.sp)
                                             }
                                         }
                                         Spacer(modifier = Modifier.width(8.dp))
