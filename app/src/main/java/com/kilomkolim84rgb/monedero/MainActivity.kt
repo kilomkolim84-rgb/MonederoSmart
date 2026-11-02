@@ -138,7 +138,7 @@ class MonederoServicio : Service() {
                 
                 prefs.edit().putBoolean(claveNotificado, true).apply()
                 
-                if(vozLista) tts?.speak("yape", TextToSpeech.QUEUE_FLUSH, null, null)
+                if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
                 mostrarNotificacion("A", monto, 0.0)
             }
         }
@@ -314,15 +314,18 @@ class MainActivity : ComponentActivity() {
                     val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
                     
                     if (leido != true || codigo.length != 6 || monto <= 0.0) continue
-                    if (historial.any { it.codigo == codigo }) continue
-                    
-                    // ✅ LEE + SUMA + GUARDA LOCAL
-                    val actual = prefs.getFloat(TOTAL_A, 0f).toDouble()
-                    totalA = actual + monto
-                    prefs.edit().putFloat(TOTAL_A, totalA.toFloat()).apply()
-                    
-                    historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalA, codigo, "")) + historial
-                    guardarHistorial()
+if (historial.any { it.codigo == codigo }) continue
+if (prefs.getBoolean("ya_sume_A_$codigo", false)) continue
+
+val actual = prefs.getFloat(TOTAL_A, 0f).toDouble()
+totalA = actual + monto
+prefs.edit()
+    .putFloat(TOTAL_A, totalA.toFloat())
+    .putBoolean("ya_sume_A_$codigo", true)
+    .apply()
+
+historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalA, codigo, "")) + historial
+guardarHistorial()
                 }
             }
             override fun onCancelled(e: DatabaseError) {}
@@ -337,15 +340,18 @@ class MainActivity : ComponentActivity() {
                     val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
                     
                     if (leido != true || codigo.length != 6 || monto <= 0.0) continue
-                    if (historial.any { it.codigo == codigo }) continue
-                    
-                    // ✅ LEE + SUMA + GUARDA LOCAL
-                    val actual = prefs.getFloat(TOTAL_B, 0f).toDouble()
-                    totalB = actual + monto
-                    prefs.edit().putFloat(TOTAL_B, totalB.toFloat()).apply()
-                    
-                    historial = listOf(Movimiento("B", fecha, "Ticket creado", monto, totalB, codigo, "")) + historial
-                    guardarHistorial()
+if (historial.any { it.codigo == codigo }) continue
+if (prefs.getBoolean("ya_sume_B_$codigo", false)) continue
+
+val actual = prefs.getFloat(TOTAL_B, 0f).toDouble()
+totalB = actual + monto
+prefs.edit()
+    .putFloat(TOTAL_B, totalB.toFloat())
+    .putBoolean("ya_sume_B_$codigo", true)
+    .apply()
+
+historial = listOf(Movimiento("B", fecha, "Ticket creado", monto, totalB, codigo, "")) + historial
+guardarHistorial()
                 }
             }
             override fun onCancelled(e: DatabaseError) {}
