@@ -75,8 +75,8 @@ class MonederoServicio : Service() {
     private lateinit var prefs: SharedPreferences
     private val TOTAL_A = "total_acumulado_a"
     private val TOTAL_B = "total_acumulado_b"
-    private var escuchandoA: ValueEventListener? = null
-    private var escuchandoB: ValueEventListener? = null
+    private var escuchandoA: ChildEventListener? = null
+private var escuchandoB: ChildEventListener? = null
     private var sensoresEscucha: ValueEventListener? = null
     private var sistemaAEscucha: ValueEventListener? = null
     private var sistemaBEscucha: ValueEventListener? = null
@@ -303,6 +303,51 @@ class MainActivity : ComponentActivity() {
         
         setContent { PantallaPrincipal() }
         
+                db.child("historial").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                for (nivel2 in snapshot.children) {
+                    val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
+                    val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
+                    val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
+                    val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+                    
+                    if (leido != true || codigo.length != 6 || monto <= 0.0) continue
+                    if (historial.any { it.codigo == codigo }) continue
+                    
+                    // ✅ LEE + SUMA + GUARDA LOCAL
+                    val actual = prefs.getFloat(TOTAL_A, 0f).toDouble()
+                    totalA = actual + monto
+                    prefs.edit().putFloat(TOTAL_A, totalA.toFloat()).apply()
+                    
+                    historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalA, codigo, "")) + historial
+                    guardarHistorial()
+                }
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        })
+
+                db.child("monederoB/historial").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                for (nivel2 in snapshot.children) {
+                    val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
+                    val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
+                    val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
+                    val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+                    
+                    if (leido != true || codigo.length != 6 || monto <= 0.0) continue
+                    if (historial.any { it.codigo == codigo }) continue
+                    
+                    // ✅ LEE + SUMA + GUARDA LOCAL
+                    val actual = prefs.getFloat(TOTAL_B, 0f).toDouble()
+                    totalB = actual + monto
+                    prefs.edit().putFloat(TOTAL_B, totalB.toFloat()).apply()
+                    
+                    historial = listOf(Movimiento("B", fecha, "Ticket creado", monto, totalB, codigo, "")) + historial
+                    guardarHistorial()
+                }
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        })
 
         db.child("sensores").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
