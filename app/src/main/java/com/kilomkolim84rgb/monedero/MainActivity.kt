@@ -128,25 +128,18 @@ class MonederoServicio : Service() {
             for (nivel2 in snapshot.children) {
                 val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
                 val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
-                val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
                 val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
 
-                // ✅ SOLO procesa lo que está marcado como leído y es válido
-                if (leido != true || codigo.length != 6 || !codigo.all { it.isDigit() } || monto <= 0.0) continue
-
-                // ✅ Marcar como leído EN ESTA EJECUCIÓN para no volver a sumar
-                val claveLeido = "leido_A_$codigo"
-                if (prefs.getBoolean(claveLeido, false)) continue // Ya se sumó antes
-
-                val totalActual = prefs.getFloat(TOTAL_A, 0f).toDouble()
-                val nuevoTotal = totalActual + monto
-                prefs.edit()
-                    .putFloat(TOTAL_A, nuevoTotal.toFloat())
-                    .putBoolean(claveLeido, true) // ✅ Guardar que ya se sumó
-                    .apply()
-
+                // Solo notifica, NO suma aquí
+                if (leido != true || codigo.length != 6 || monto <= 0.0) continue
+                
+                val claveNotificado = "notificado_A_$codigo"
+                if (prefs.getBoolean(claveNotificado, false)) continue
+                
+                prefs.edit().putBoolean(claveNotificado, true).apply()
+                
                 if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
-                mostrarNotificacion("A", monto, nuevoTotal)
+                mostrarNotificacion("A", monto, 0.0)
             }
         }
         override fun onCancelled(e: DatabaseError) {}
@@ -161,25 +154,18 @@ class MonederoServicio : Service() {
             for (nivel2 in snapshot.children) {
                 val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
                 val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
-                val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
                 val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
 
-                // ✅ SOLO procesa lo que está marcado como leído y es válido
-                if (leido != true || codigo.length != 6 || !codigo.all { it.isDigit() } || monto <= 0.0) continue
-
-                // ✅ Marcar como leído para no volver a sumar
-                val claveLeido = "leido_B_$codigo"
-                if (prefs.getBoolean(claveLeido, false)) continue // Ya se sumó antes
-
-                val totalActual = prefs.getFloat(TOTAL_B, 0f).toDouble()
-                val nuevoTotal = totalActual + monto
-                prefs.edit()
-                    .putFloat(TOTAL_B, nuevoTotal.toFloat())
-                    .putBoolean(claveLeido, true) // ✅ Guardar que ya se sumó
-                    .apply()
-
+                // Solo notifica, NO suma aquí
+                if (leido != true || codigo.length != 6 || monto <= 0.0) continue
+                
+                val claveNotificado = "notificado_B_$codigo"
+                if (prefs.getBoolean(claveNotificado, false)) continue
+                
+                prefs.edit().putBoolean(claveNotificado, true).apply()
+                
                 if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
-                mostrarNotificacion("B", monto, nuevoTotal)
+                mostrarNotificacion("B", monto, 0.0)
             }
         }
         override fun onCancelled(e: DatabaseError) {}
