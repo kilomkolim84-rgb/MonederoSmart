@@ -75,8 +75,8 @@ class MonederoServicio : Service() {
     private lateinit var prefs: SharedPreferences
     private val TOTAL_A = "total_acumulado_a"
     private val TOTAL_B = "total_acumulado_b"
-    private var escuchandoA: ValueEventListener? = null
-    private var escuchandoB: ValueEventListener? = null
+    private var escuchandoA: ChildEventListener? = null
+private var escuchandoB: ChildEventListener? = null
     private var sensoresEscucha: ValueEventListener? = null
     private var sistemaAEscucha: ValueEventListener? = null
     private var sistemaBEscucha: ValueEventListener? = null
@@ -120,55 +120,85 @@ class MonederoServicio : Service() {
     }
 
     private fun escucharHistorialA() {
+    val db = FirebaseDatabase.getInstance().reference
+    db.keepSynced(true)
+
+    escuchandoA = object : ChildEventListener {
+        override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
+            val codigo = snapshot.child("codigo").getValue(String::class.java) ?: ""
+            val leido = snapshot.child("leido_por_monedero").getValue(Boolean::class.java) ?: false
+            val monto = snapshot.child("monto").getValue(Double::class.java) ?: 0.0
+            
+            // 1. Si ya fue procesado, SALIR
+            if (leido) return
+            if (codigo.length != 6 || !codigo.all { it.isDigit() }) return
+            if (monto <= 0.0) return
+
+            // 2. MARCAR COMO LEÍDO PRIMERO — ¡ANTES DE TODO!
+            snapshot.ref.child("leido_por_monedero").setValue(true)
+
+            // 3. REPRODUCIR SONIDO
+            if(vozLista) {
+                tts?.stop()  // ⚠️ DETENER POR SI HAY OTRO REPRODUCIÉNDOSE
+                tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
+            }
+
+            // 4. SUMAR Y GUARDAR
+            val totalActual = prefs.getFloat(TOTAL_A, 0f).toDouble()
+            val nuevoTotal = totalActual + monto
+            prefs.edit().putFloat(TOTAL_A, nuevoTotal.toFloat()).apply()
+
+            // 5. MOSTRAR NOTIFICACIÓN
+            mostrarNotificacion("A", monto, nuevoTotal)
+        }
+
+        override fun onCancelled(error: DatabaseError) {}
+        override fun onChildChanged(snapshot: DataSnapshot, name: String?) {}
+        override fun onChildRemoved(snapshot: DataSnapshot) {}
+        override fun onChildMoved(snapshot: DataSnapshot, name: String?) {}
+    }
+    db.child("historial").addChildEventListener(escuchandoA!!)
+}
+
+        private fun escucharHistorialB() {
         val db = FirebaseDatabase.getInstance().reference
         db.keepSynced(true)
 
-        escuchandoA = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                for (nivel2 in snapshot.children) {
-                   val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
-                     val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
-                    val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+        escuchandoB = object : ChildEventListener {
+            override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
+                val codigo = snapshot.child("codigo").getValue(String::class.java) ?: ""
+                val leido = snapshot.child("leido_por_monedero").getValue(Boolean::class.java) ?: false
+                val monto = snapshot.child("monto").getValue(Double::class.java) ?: 0.0
+                
+                // 1. Si ya fue procesado, SALIR
+                if (leido) return
+                if (codigo.length != 6 || !codigo.all { it.isDigit() }) return
+                if (monto <= 0.0) return
 
-                     if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
-                     if (monto <= 0.0) continue
-                    val totalActual = prefs.getFloat(TOTAL_A, 0f).toDouble()
-                    val nuevoTotal = totalActual + monto
-                    prefs.edit().putFloat(TOTAL_A, nuevoTotal.toFloat()).apply()
+                // 2. MARCAR COMO LEÍDO PRIMERO
+                snapshot.ref.child("leido_por_monedero").setValue(true)
 
-                    if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
-                    mostrarNotificacion("A", monto, nuevoTotal)
+                // 3. REPRODUCIR SONIDO
+                if(vozLista) {
+                    tts?.stop()
+                    tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
                 }
+
+                // 4. SUMAR Y GUARDAR
+                val totalActual = prefs.getFloat(TOTAL_B, 0f).toDouble()
+                val nuevoTotal = totalActual + monto
+                prefs.edit().putFloat(TOTAL_B, nuevoTotal.toFloat()).apply()
+
+                // 5. MOSTRAR NOTIFICACIÓN
+                mostrarNotificacion("B", monto, nuevoTotal)
             }
-            override fun onCancelled(e: DatabaseError) {}
+
+            override fun onCancelled(error: DatabaseError) {}
+            override fun onChildChanged(snapshot: DataSnapshot, name: String?) {}
+            override fun onChildRemoved(snapshot: DataSnapshot) {}
+            override fun onChildMoved(snapshot: DataSnapshot, name: String?) {}
         }
-        db.child("historial").addValueEventListener(escuchandoA!!)
-    }
-
-    private fun escucharHistorialB() {
-        val db = FirebaseDatabase.getInstance().reference
-        escuchandoB = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                for (nivel2 in snapshot.children) {
-                    val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
-                    val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
-                    val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
-
-                    if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
-                    if (monto <= 0.0) continue
-
-
-                    val totalActual = prefs.getFloat(TOTAL_B, 0f).toDouble()
-                    val nuevoTotal = totalActual + monto
-                    prefs.edit().putFloat(TOTAL_B, nuevoTotal.toFloat()).apply()
-
-                    if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
-                    mostrarNotificacion("B", monto, nuevoTotal)
-                }
-            }
-            override fun onCancelled(e: DatabaseError) {}
-        }
-        db.child("monederoB/historial").addValueEventListener(escuchandoB!!)
+        db.child("monederoB/historial").addChildEventListener(escuchandoB!!)
     }
 
     private fun escucharSensores() {
@@ -314,12 +344,14 @@ class MainActivity : ComponentActivity() {
                     if (leido != true || codigo.length != 6 || monto <= 0.0) continue
                     if (historial.any { it.codigo == codigo }) continue
                     
-                    // ✅ LEE + SUMA + GUARDA LOCAL
-                    val actual = prefs.getFloat(TOTAL_A, 0f).toDouble()
-                    totalA = actual + monto
-                    prefs.edit().putFloat(TOTAL_A, totalA.toFloat()).apply()
-                    
-                    historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalA, codigo, "")) + historial
+                    // ❌ ELIMINA ESTO de AMBOS listener:
+// val actual = prefs.getFloat(TOTAL_A, 0f).toDouble()
+// totalA = actual + monto  ← BORRAR
+// prefs.edit().putFloat(TOTAL_A, totalA.toFloat()).apply()  ← BORRAR
+
+// ✅ DEJA SOLO ESTO:
+historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalA, codigo, "")) + historial
+
                     guardarHistorial()
                 }
             }
@@ -337,13 +369,9 @@ class MainActivity : ComponentActivity() {
                     if (leido != true || codigo.length != 6 || monto <= 0.0) continue
                     if (historial.any { it.codigo == codigo }) continue
                     
-                    // ✅ LEE + SUMA + GUARDA LOCAL
-                    val actual = prefs.getFloat(TOTAL_B, 0f).toDouble()
-                    totalB = actual + monto
-                    prefs.edit().putFloat(TOTAL_B, totalB.toFloat()).apply()
-                    
-                    historial = listOf(Movimiento("B", fecha, "Ticket creado", monto, totalB, codigo, "")) + historial
-                    guardarHistorial()
+                    // ✅ SOLO AGREGA AL HISTORIAL:
+historial = listOf(Movimiento("B", fecha, "Ticket creado", monto, totalB, codigo, "")) + historial
+guardarHistorial()
                 }
             }
             override fun onCancelled(e: DatabaseError) {}
