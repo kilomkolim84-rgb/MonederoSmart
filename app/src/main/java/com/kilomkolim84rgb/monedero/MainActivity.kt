@@ -1,4 +1,136 @@
-odigo.length != 6 || !codigo.all { it.isDigit() }) continue
+package com.kilomkolim84rgb.monedero
+
+import android.app.AlertDialog
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.content.SharedPreferences
+import android.media.AudioAttributes
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.os.IBinder
+import android.speech.tts.TextToSpeech
+import android.widget.EditText
+import android.widget.ImageButton
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import android.Manifest
+import android.content.pm.PackageManager
+import android.text.InputFilter
+import android.text.InputType
+import android.view.ViewGroup
+import android.widget.LinearLayout
+import com.google.firebase.FirebaseApp
+import com.google.firebase.database.*
+import java.text.SimpleDateFormat
+import java.util.*
+import kotlinx.coroutines.delay
+
+const val CLAVE_VACIADO_A = "222777"
+const val CLAVE_VACIADO_B = "333888"
+const val CANAL_NOTIFICACIONES = "canal_monedero"
+const val CANAL_SERVICIO = "canal_servicio"
+const val ID_NOTIFICACION_SERVICIO = 12345
+const val DISTANCIA_PELIGRO = 8.0
+const val DISTANCIA_SEGURIDAD = 9.0
+const val TIEMPO_LIMITE_SEGUNDOS = 62
+
+data class Movimiento(
+    val monedero: String = "A",
+    val fechaHora: String = "",
+    val detalle: String = "",
+    val montoIngresado: Double = 0.0,
+    val totalAcumulado: Double = 0.0,
+    val codigo: String = "",
+    val alias: String = ""
+)
+
+class MonederoServicio : Service() {
+    private var tts: TextToSpeech? = null
+    private var vozLista = false
+    private lateinit var prefs: SharedPreferences
+    private val TOTAL_A = "total_acumulado_a"
+    private val TOTAL_B = "total_acumulado_b"
+    private var escuchandoA: ValueEventListener? = null
+    private var escuchandoB: ValueEventListener? = null
+    private var sensoresEscucha: ValueEventListener? = null
+    private var sistemaAEscucha: ValueEventListener? = null
+    private var sistemaBEscucha: ValueEventListener? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        prefs = getSharedPreferences("MonederoPrefs", Context.MODE_PRIVATE)
+        
+        tts = TextToSpeech(this) { estado ->
+            vozLista = estado == TextToSpeech.SUCCESS
+            if(vozLista) {
+                tts?.language = Locale("es", "PE")
+                tts?.setPitch(1.5f)
+                tts?.setSpeechRate(1.0f)
+            }
+        }
+
+        crearCanalServicio()
+        val notificacion = NotificationCompat.Builder(this, CANAL_SERVICIO)
+            .setSmallIcon(android.R.drawable.ic_menu_info_details)
+            .setContentTitle("MONEDERO PAOYHAN")
+            .setContentText("✅ Escuchando tickets...")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .build()
+        startForeground(ID_NOTIFICACION_SERVICIO, notificacion)
+
+        escucharHistorialA()
+        escucharHistorialB()
+        escucharSensores()
+        escucharSistemaA()
+        escucharSistemaB()
+    }
+
+    private fun crearCanalServicio() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val canal = NotificationChannel(CANAL_SERVICIO, "Servicio Monedero Paoyhan", NotificationManager.IMPORTANCE_LOW)
+            canal.description = "Escucha tickets en segundo plano"
+            getSystemService(NotificationManager::class.java).createNotificationChannel(canal)
+        }
+    }
+
+    private fun escucharHistorialA() {
+        val db = FirebaseDatabase.getInstance().reference
+        db.keepSynced(true)
+
+        escuchandoA = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                for (nivel2 in snapshot.children) {
+                   val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
+                     val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
+                    val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+
+                     if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
                      if (monto <= 0.0) continue
                     val totalActual = prefs.getFloat(TOTAL_A, 0f).toDouble()
                     val nuevoTotal = totalActual + monto
@@ -171,7 +303,6 @@ class MainActivity : ComponentActivity() {
         
         setContent { PantallaPrincipal() }
         
-
 
         db.child("sensores").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
