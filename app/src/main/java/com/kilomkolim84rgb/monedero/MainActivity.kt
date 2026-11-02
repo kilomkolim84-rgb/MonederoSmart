@@ -75,8 +75,8 @@ class MonederoServicio : Service() {
     private lateinit var prefs: SharedPreferences
     private val TOTAL_A = "total_acumulado_a"
     private val TOTAL_B = "total_acumulado_b"
-    private var escuchandoA: ChildEventListener? = null
-private var escuchandoB: ChildEventListener? = null
+    private var escuchandoA: ValueEventListener? = null
+    private var escuchandoB: ValueEventListener? = null
     private var sensoresEscucha: ValueEventListener? = null
     private var sistemaAEscucha: ValueEventListener? = null
     private var sistemaBEscucha: ValueEventListener? = null
@@ -120,56 +120,72 @@ private var escuchandoB: ChildEventListener? = null
     }
 
     private fun escucharHistorialA() {
-        val db = FirebaseDatabase.getInstance().reference
-        db.keepSynced(true)
+    val db = FirebaseDatabase.getInstance().reference
+    db.keepSynced(true)
 
-        escuchandoA = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                for (nivel2 in snapshot.children) {
-                   val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
-                     val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
-                    val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+    escuchandoA = object : ValueEventListener {
+        override fun onDataChange(snapshot: DataSnapshot) {
+            for (nivel2 in snapshot.children) {
+                val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
+                val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
+                val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+                val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
 
-                     if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
-                     if (monto <= 0.0) continue
-                    val totalActual = prefs.getFloat(TOTAL_A, 0f).toDouble()
-                    val nuevoTotal = totalActual + monto
-                    prefs.edit().putFloat(TOTAL_A, nuevoTotal.toFloat()).apply()
+                // ✅ SOLO procesa lo que está marcado como leído y es válido
+                if (leido != true || codigo.length != 6 || !codigo.all { it.isDigit() } || monto <= 0.0) continue
 
-                    if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
-                    mostrarNotificacion("A", monto, nuevoTotal)
-                }
+                // ✅ Marcar como leído EN ESTA EJECUCIÓN para no volver a sumar
+                val claveLeido = "leido_A_$codigo"
+                if (prefs.getBoolean(claveLeido, false)) continue // Ya se sumó antes
+
+                val totalActual = prefs.getFloat(TOTAL_A, 0f).toDouble()
+                val nuevoTotal = totalActual + monto
+                prefs.edit()
+                    .putFloat(TOTAL_A, nuevoTotal.toFloat())
+                    .putBoolean(claveLeido, true) // ✅ Guardar que ya se sumó
+                    .apply()
+
+                if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
+                mostrarNotificacion("A", monto, nuevoTotal)
             }
-            override fun onCancelled(e: DatabaseError) {}
         }
-        db.child("historial").addValueEventListener(escuchandoA!!)
+        override fun onCancelled(e: DatabaseError) {}
     }
+    db.child("historial").addValueEventListener(escuchandoA!!)
+}
 
     private fun escucharHistorialB() {
-        val db = FirebaseDatabase.getInstance().reference
-        escuchandoB = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                for (nivel2 in snapshot.children) {
-                    val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
-                    val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
-                    val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+    val db = FirebaseDatabase.getInstance().reference
+    escuchandoB = object : ValueEventListener {
+        override fun onDataChange(snapshot: DataSnapshot) {
+            for (nivel2 in snapshot.children) {
+                val codigo = nivel2.child("codigo").getValue(String::class.java) ?: ""
+                val monto = nivel2.child("monto").getValue(Double::class.java) ?: 0.0
+                val fecha = nivel2.child("fecha").getValue(String::class.java) ?: ""
+                val leido = nivel2.child("leido_por_monedero").getValue(Boolean::class.java)
 
-                    if (codigo.length != 6 || !codigo.all { it.isDigit() }) continue
-                    if (monto <= 0.0) continue
+                // ✅ SOLO procesa lo que está marcado como leído y es válido
+                if (leido != true || codigo.length != 6 || !codigo.all { it.isDigit() } || monto <= 0.0) continue
 
+                // ✅ Marcar como leído para no volver a sumar
+                val claveLeido = "leido_B_$codigo"
+                if (prefs.getBoolean(claveLeido, false)) continue // Ya se sumó antes
 
-                    val totalActual = prefs.getFloat(TOTAL_B, 0f).toDouble()
-                    val nuevoTotal = totalActual + monto
-                    prefs.edit().putFloat(TOTAL_B, nuevoTotal.toFloat()).apply()
+                val totalActual = prefs.getFloat(TOTAL_B, 0f).toDouble()
+                val nuevoTotal = totalActual + monto
+                prefs.edit()
+                    .putFloat(TOTAL_B, nuevoTotal.toFloat())
+                    .putBoolean(claveLeido, true) // ✅ Guardar que ya se sumó
+                    .apply()
 
-                    if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
-                    mostrarNotificacion("B", monto, nuevoTotal)
-                }
+                if(vozLista) tts?.speak("plin", TextToSpeech.QUEUE_FLUSH, null, null)
+                mostrarNotificacion("B", monto, nuevoTotal)
             }
-            override fun onCancelled(e: DatabaseError) {}
         }
-        db.child("monederoB/historial").addValueEventListener(escuchandoB!!)
+        override fun onCancelled(e: DatabaseError) {}
     }
+    db.child("monederoB/historial").addValueEventListener(escuchandoB!!)
+}
 
     private fun escucharSensores() {
         val db = FirebaseDatabase.getInstance().reference
