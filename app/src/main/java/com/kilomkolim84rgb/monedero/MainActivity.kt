@@ -351,7 +351,6 @@ prefs.edit()
     .putFloat(TOTAL_B, totalB.toFloat())
     .putBoolean("ya_sume_B_$codigo", true)
     .apply()
-.apply()
 // 🔑 Agrega aquí también para el B
 totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()
 
