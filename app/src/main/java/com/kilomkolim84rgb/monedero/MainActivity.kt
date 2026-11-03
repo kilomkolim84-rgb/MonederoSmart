@@ -138,7 +138,7 @@ class MonederoServicio : Service() {
                 
                 prefs.edit().putBoolean(claveNotificado, true).apply()
                 
-                if(vozLista) tts?.speak("yape", TextToSpeech.QUEUE_FLUSH, null, null)
+                //if(vozLista) tts?.speak("yape", TextToSpeech.QUEUE_FLUSH, null, null)
                 mostrarNotificacion("A", monto, 0.0)
             }
         }
@@ -164,7 +164,7 @@ class MonederoServicio : Service() {
                 
                 prefs.edit().putBoolean(claveNotificado, true).apply()
                 
-                if(vozLista) tts?.speak("yape", TextToSpeech.QUEUE_FLUSH, null, null)
+                //if(vozLista) tts?.speak("yape", TextToSpeech.QUEUE_FLUSH, null, null)
                 mostrarNotificacion("B", monto, 0.0)
             }
         }
