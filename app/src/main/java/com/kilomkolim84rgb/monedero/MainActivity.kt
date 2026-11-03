@@ -323,6 +323,8 @@ prefs.edit()
     .putFloat(TOTAL_A, totalA.toFloat())
     .putBoolean("ya_sume_A_$codigo", true)
     .apply()
+// 🔑 Fuerza la actualización en pantalla al instante
+totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()
 
 historial = listOf(Movimiento("A", fecha, "Ticket creado", monto, totalA, codigo, "")) + historial
 guardarHistorial()
@@ -349,6 +351,9 @@ prefs.edit()
     .putFloat(TOTAL_B, totalB.toFloat())
     .putBoolean("ya_sume_B_$codigo", true)
     .apply()
+.apply()
+// 🔑 Agrega aquí también para el B
+totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()
 
 historial = listOf(Movimiento("B", fecha, "Ticket creado", monto, totalB, codigo, "")) + historial
 guardarHistorial()
@@ -415,10 +420,21 @@ guardarHistorial()
     }
 
     private fun actualizarManual() {
-        cargarDatosGuardados()
-        actualizarEstadoSistema()
-        Toast.makeText(this, "✅ Actualizado", Toast.LENGTH_SHORT).show()
-    }
+    // Recarga todo desde donde se guarda
+    cargarDatosGuardados()
+    
+    // 🔑 Recarga los TOTALES desde SharedPreferences
+    totalA = prefs.getFloat(TOTAL_A, 0f).toDouble()
+    totalB = prefs.getFloat(TOTAL_B, 0f).toDouble()
+    
+    // Recalcula el estado de conexión
+    actualizarEstadoSistema()
+    
+    // Fuerza a recargar el historial guardado
+    cargarHistorialGuardado()
+    
+    Toast.makeText(this, "✅ Actualizado — A: S/ ${String.format("%.2f", totalA)} | B: S/ ${String.format("%.2f", totalB)}", Toast.LENGTH_SHORT).show()
+}
 
     private fun pedirClaveVaciado(monedero: String, claveCorrecta: String, onConfirmar: () -> Unit) {
         val campoClave = EditText(this)
@@ -522,7 +538,7 @@ guardarHistorial()
 
     private fun crearCanalNotificaciones() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val sonidoUri = Uri.parse("android.resource://$packageName/raw/plin")
+            val sonidoUri = Uri.parse("android.resource://$packageName/raw/yape")
             val atributosAudio = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
