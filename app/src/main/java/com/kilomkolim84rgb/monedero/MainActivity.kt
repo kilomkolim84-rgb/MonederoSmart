@@ -272,6 +272,13 @@ class MainActivity : ComponentActivity() {
     private var tieneTemperatura by mutableStateOf(false)
     private var tieneRayos by mutableStateOf(false)
     private var historial by mutableStateOf(listOf<Movimiento>())
+    private var voltajeB by mutableStateOf(0.0)
+private var temperaturaB by mutableStateOf(0.0)
+private var rayosDistanciaB by mutableStateOf(999.0)
+private var tieneVoltajeB by mutableStateOf(false)
+private var tieneTemperaturaB by mutableStateOf(false)
+private var tieneRayosB by mutableStateOf(false)
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -372,6 +379,18 @@ guardarHistorial()
             }
             override fun onCancelled(e: DatabaseError) {}
         })
+        
+        db.child("sensoresB").addValueEventListener(object : ValueEventListener {
+    override fun onDataChange(snapshot: DataSnapshot) {
+        tieneVoltajeB = snapshot.hasChild("voltaje")
+        tieneTemperaturaB = snapshot.hasChild("temperatura")
+        tieneRayosB = snapshot.hasChild("rayos_km")
+        voltajeB = snapshot.child("voltaje").getValue(Double::class.java) ?: 0.0
+        temperaturaB = snapshot.child("temperatura").getValue(Double::class.java) ?: 0.0
+        rayosDistanciaB = snapshot.child("rayos_km").getValue(Double::class.java) ?: 999.0
+    }
+    override fun onCancelled(e: DatabaseError) {}
+})
 
         db.child("sistema").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -689,6 +708,57 @@ guardarHistorial()
                         val textoSistemaB = if (sistemaBActivo) "SISTEMA ON" else "SISTEMA OFF"
                         Box(modifier = Modifier.fillMaxWidth().background(colorSistemaB, RoundedCornerShape(8.dp)).padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
                             Text(textoSistemaB, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("SENSORES — MONEDERO B", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFB3E5FC))) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text("⚡ VOLTAJE B", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(if (tieneVoltajeB && sistemaBActivo) String.format("%.1f V", voltajeB) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(Color(0xFFFFCC80))) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text("🌡️ TEMP B", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(if (tieneTemperaturaB && sistemaBActivo) String.format("%.1f °C", temperaturaB) else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    val colorRayosB = when {
+                        !sistemaBActivo -> Color(0xFF4CAF50)
+                        !tieneRayosB -> Color(0xFF4CAF50)
+                        rayosDistanciaB < DISTANCIA_PELIGRO -> Color(0xFFFF5252)
+                        rayosDistanciaB <= 40.0 -> Color(0xFFFFC107)
+                        else -> Color(0xFF4CAF50)
+                    }
+                    val textoRayosB = when {
+                        !sistemaBActivo || !tieneRayosB -> "-- km ✅"
+                        rayosDistanciaB < DISTANCIA_PELIGRO -> "${String.format("%.0f", rayosDistanciaB)} km ⚠️"
+                        rayosDistanciaB <= 40.0 -> "${String.format("%.0f", rayosDistanciaB)} km"
+                        else -> "-- km ✅"
+                    }
+                    Card(modifier = Modifier.weight(1f).height(70.dp), shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(colorRayosB)) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text("⚠️ RAYOS B", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(textoRayosB, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
