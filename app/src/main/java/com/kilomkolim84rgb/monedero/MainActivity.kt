@@ -684,22 +684,21 @@ guardarHistorial()
                         val textoSistemaA = if (sistemaAActivo) "SISTEMA ON" else "SISTEMA OFF"
                         Box(modifier = Modifier.fillMaxWidth().background(colorSistemaA, RoundedCornerShape(8.dp)).padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
                             Text(textoSistemaA, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            }
-Button(
-    onClick = {
-        val ref = FirebaseDatabase.getInstance().getReference("monederoA/cerrojo")
-        ref.setValue("OPEN")
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            ref.setValue("ON")
-        }, 10000)
-    },
-    colors = ButtonDefaults.buttonColors(Color(0xFF4CAF50)),
-    shape = RoundedCornerShape(8.dp),
-    modifier = Modifier.fillMaxWidth()
-) {
-    Text("🔓 ABRIR CERROJO A", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-}
+                        }
+                                                Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                val ref = FirebaseDatabase.getInstance().getReference("monederoA/cerrojo")
+                                ref.setValue("OPEN")
+                                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                    ref.setValue("ON")
+                                }, 10000)
+                            },
+                            colors = ButtonDefaults.buttonColors(Color(0xFF4CAF50)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("🔓 ABRIR CERROJO A", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -724,22 +723,21 @@ Button(
                         val textoSistemaB = if (sistemaBActivo) "SISTEMA ON" else "SISTEMA OFF"
                         Box(modifier = Modifier.fillMaxWidth().background(colorSistemaB, RoundedCornerShape(8.dp)).padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
                             Text(textoSistemaB, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            }
-Button(
-    onClick = {
-        val ref = FirebaseDatabase.getInstance().getReference("monederoB/cerrojo")
-        ref.setValue("OPEN")
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            ref.setValue("ON")
-        }, 10000)
-    },
-    colors = ButtonDefaults.buttonColors(Color(0xFF4CAF50)),
-    shape = RoundedCornerShape(8.dp),
-    modifier = Modifier.fillMaxWidth()
-) {
-    Text("🔓 ABRIR CERROJO B", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-}
+                        }
+                                                Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                val ref = FirebaseDatabase.getInstance().getReference("monederoB/cerrojo")
+                                ref.setValue("OPEN")
+                                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                    ref.setValue("ON")
+                                }, 10000)
+                            },
+                            colors = ButtonDefaults.buttonColors(Color(0xFF4CAF50)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("🔓 ABRIR CERROJO B", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -806,7 +804,7 @@ Button(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Column(modifier = Modifier.fillMaxWidth().background(Color(0xFFE0F7FF), RoundedCornerShape(12.dp)).padding(8.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().weight(1f).background(Color(0xFFE0F7FF), RoundedCornerShape(12.dp)).padding(8.dp)) {
                     LazyColumn(modifier = Modifier.fillMaxWidth()) {
                         items(historial.size) { posicion ->
                             val mov = historial[posicion]
@@ -839,6 +837,7 @@ Button(
                 }
             }
         }
+    }
 
     override fun onDestroy() {
         super.onDestroy()
