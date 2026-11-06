@@ -685,20 +685,25 @@ guardarHistorial()
                         Box(modifier = Modifier.fillMaxWidth().background(colorSistemaA, RoundedCornerShape(8.dp)).padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
                             Text(textoSistemaA, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
-                                                Spacer(modifier = Modifier.height(8.dp))
+                                                                        var cerrojoAAbierto by remember { mutableStateOf(false) }
+                        Spacer(modifier = Modifier.height(8.dp))
                         Button(
                             onClick = {
+                                cerrojoAAbierto = true
                                 val ref = FirebaseDatabase.getInstance().getReference("monederoA/cerrojo")
                                 ref.setValue("OPEN")
                                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                    cerrojoAAbierto = false
                                     ref.setValue("ON")
                                 }, 10000)
                             },
-                            colors = ButtonDefaults.buttonColors(Color(0xFF4CAF50)),
+                            colors = ButtonDefaults.buttonColors(
+                                if (cerrojoAAbierto) Color(0xFFFF9800) else Color(0xFF4CAF50)
+                            ),
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("🔓 ABRIR CERROJO A", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(if (cerrojoAAbierto) "⏳ CERRANDO..." else "🔓 ABRIR CERROJO A", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -724,20 +729,25 @@ guardarHistorial()
                         Box(modifier = Modifier.fillMaxWidth().background(colorSistemaB, RoundedCornerShape(8.dp)).padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
                             Text(textoSistemaB, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
-                                                Spacer(modifier = Modifier.height(8.dp))
+                                                                        var cerrojoBAbierto by remember { mutableStateOf(false) }
+                        Spacer(modifier = Modifier.height(8.dp))
                         Button(
                             onClick = {
+                                cerrojoBAbierto = true
                                 val ref = FirebaseDatabase.getInstance().getReference("monederoB/cerrojo")
                                 ref.setValue("OPEN")
                                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                    cerrojoBAbierto = false
                                     ref.setValue("ON")
                                 }, 10000)
                             },
-                            colors = ButtonDefaults.buttonColors(Color(0xFF4CAF50)),
+                            colors = ButtonDefaults.buttonColors(
+                                if (cerrojoBAbierto) Color(0xFFFF9800) else Color(0xFF4CAF50)
+                            ),
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("🔓 ABRIR CERROJO B", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(if (cerrojoBAbierto) "⏳ CERRANDO..." else "🔓 ABRIR CERROJO B", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
