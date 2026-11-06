@@ -806,7 +806,7 @@ Button(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Column(modifier = Modifier.fillMaxWidth().weight(weight=1f).background(Color(0xFFE0F7FF), RoundedCornerShape(12.dp)).padding(8.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().weight(1f).background(Color(0xFFE0F7FF), RoundedCornerShape(12.dp)).padding(8.dp)) {
                     LazyColumn(modifier = Modifier.fillMaxWidth()) {
                         items(historial.size) { posicion ->
                             val mov = historial[posicion]
