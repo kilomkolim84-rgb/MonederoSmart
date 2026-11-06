@@ -684,6 +684,22 @@ guardarHistorial()
                         val textoSistemaA = if (sistemaAActivo) "SISTEMA ON" else "SISTEMA OFF"
                         Box(modifier = Modifier.fillMaxWidth().background(colorSistemaA, RoundedCornerShape(8.dp)).padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
                             Text(textoSistemaA, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            }
+Button(
+    onClick = {
+        val ref = FirebaseDatabase.getInstance().getReference("monederoA/cerrojo")
+        ref.setValue("OPEN")
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            ref.setValue("ON")
+        }, 10000)
+    },
+    colors = ButtonDefaults.buttonColors(Color(0xFF4CAF50)),
+    shape = RoundedCornerShape(8.dp),
+    modifier = Modifier.fillMaxWidth()
+) {
+    Text("🔓 ABRIR CERROJO A", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+}
                         }
                     }
 
@@ -708,6 +724,22 @@ guardarHistorial()
                         val textoSistemaB = if (sistemaBActivo) "SISTEMA ON" else "SISTEMA OFF"
                         Box(modifier = Modifier.fillMaxWidth().background(colorSistemaB, RoundedCornerShape(8.dp)).padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
                             Text(textoSistemaB, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            }
+Button(
+    onClick = {
+        val ref = FirebaseDatabase.getInstance().getReference("monederoB/cerrojo")
+        ref.setValue("OPEN")
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            ref.setValue("ON")
+        }, 10000)
+    },
+    colors = ButtonDefaults.buttonColors(Color(0xFF4CAF50)),
+    shape = RoundedCornerShape(8.dp),
+    modifier = Modifier.fillMaxWidth()
+) {
+    Text("🔓 ABRIR CERROJO B", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+}
                         }
                     }
                 }
